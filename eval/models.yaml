@@ -1,0 +1,21 @@
+# The only place a model is named. Roles reference a tier, never a model string.
+#
+# Tier indirection exists so adding a non-Anthropic provider later means adding
+# a block here, not editing every role definition. Phase 1 is Anthropic only.
+#
+# From the 4.6 generation onward a dateless Claude model ID is the canonical ID
+# for that release and maps to a fixed snapshot rather than floating to the
+# newest model, which is why claude-opus-5 needs no date while
+# claude-haiku-4-5-20251001 carries one.
+
+tiers:
+  deep:     { provider: anthropic, id: claude-opus-5 }
+  balanced: { provider: anthropic, id: claude-sonnet-5 }
+  fast:     { provider: anthropic, id: claude-haiku-4-5-20251001 }
+  frontier: { provider: anthropic, id: claude-fable-5-1 }   # escalation only
+
+roles:
+  planner:     deep
+  reviewer:    deep
+  test-writer: balanced
+  qa:          fast
