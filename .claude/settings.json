@@ -4,7 +4,7 @@
       {
         "hooks": [
           {
-            "command": "env HARNESS_TOOL=claude ./scripts/hook.sh",
+            "command": "env HARNESS_TOOL=claude HARNESS_EVENT=post_tool ./scripts/hook.sh",
             "type": "command"
           }
         ]
@@ -14,7 +14,7 @@
       {
         "hooks": [
           {
-            "command": "env HARNESS_TOOL=claude ./scripts/hook.sh",
+            "command": "env HARNESS_TOOL=claude HARNESS_EVENT=pre_tool ./scripts/hook.sh",
             "type": "command"
           }
         ]
@@ -24,7 +24,7 @@
       {
         "hooks": [
           {
-            "command": "env HARNESS_TOOL=claude ./scripts/hook.sh",
+            "command": "env HARNESS_TOOL=claude HARNESS_EVENT=session_start ./scripts/hook.sh",
             "type": "command"
           }
         ]
@@ -34,7 +34,7 @@
       {
         "hooks": [
           {
-            "command": "env HARNESS_TOOL=claude ./scripts/hook.sh",
+            "command": "env HARNESS_TOOL=claude HARNESS_EVENT=stop ./scripts/hook.sh",
             "type": "command"
           }
         ]

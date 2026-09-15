@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# post_tool: edit-tier verify on the edited file. Auto-fix is allowed here only.
+set -euo pipefail
+HARNESS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+# shellcheck source=../../../scripts/lib/config.sh
+source "$HARNESS_ROOT/scripts/lib/config.sh"
+# shellcheck source=../../../scripts/lib/trace.sh
+source "$HARNESS_ROOT/scripts/lib/trace.sh"
+
+payload="$(cat || true)"
+[[ -z "$payload" ]] && payload="{}"
+root="${VERIFY_ROOT:-$HARNESS_ROOT}"
+harness_config_load "$HARNESS_ROOT"
+
+tool_name="$(jq -r '.tool_name // .toolName // .tool // empty' <<<"$payload")"
+tool_input="$(jq -c '.tool_input // .toolInput // .input // {}' <<<"$payload")"
+file_path="$(jq -r '.file_path // .filePath // .path // empty' <<<"$tool_input")"
+
+# Only act on edit-like tools with a file path.
+case "$tool_name" in
+  Edit|Write|edit|write|StrReplace|search_replace|AfterEdit*|afterFileEdit) ;;
+  *)
+    if [[ -z "$file_path" ]]; then
+      exit 0
+    fi
+    ;;
+esac
+
+if [[ -z "$file_path" ]]; then
+  exit 0
+fi
+
+rel="$file_path"
+case "$file_path" in
+  /*) rel="${file_path#$root/}" ;;
+esac
+
+# Auto-fix with prettier when the file is a supported type.
+case "$rel" in
+  *.ts|*.tsx|*.js|*.jsx|*.mjs|*.cjs|*.json|*.md|*.yml|*.yaml)
+    if command -v npx >/dev/null; then
+      (cd "$root" && npx --no-install prettier --write -- "$rel") >/dev/null 2>&1 || true
+    fi
+    ;;
+esac
+
+export VERIFY_ROOT="$root"
+export VERIFY_CHANGED_FILES="$rel"
+# Edit tier is non-blocking for the tool call (spec: Blocking = No).
+set +e
+"$HARNESS_ROOT/scripts/verify.sh" edit >/dev/null
+ec=$?
+set -e
+
+if [[ "$(harness_config_get trace.enabled)" == "true" ]]; then
+  level="$(harness_config_get trace.level)"
+  if [[ "$level" == "full" ]]; then
+    harness_trace_append "post_tool" "$(jq -nc --argjson p "$payload" --argfile r "$root/.verify/report.json" '{call:$p,report:$r}' 2>/dev/null || jq -nc --argjson p "$payload" '{call:$p}')"
+  else
+    harness_trace_append "post_tool" "$(jq -nc --arg file "$rel" --argjson ec "$ec" '{file:$file,verifyExit:$ec}')"
+  fi
+fi
+
+# Non-blocking: never deny the tool.
+exit 0

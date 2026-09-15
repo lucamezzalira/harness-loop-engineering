@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+# stop: turn-tier verify with re-entry guard, then reviewer on real work.
+set -euo pipefail
+HARNESS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+# shellcheck source=../../../scripts/lib/config.sh
+source "$HARNESS_ROOT/scripts/lib/config.sh"
+# shellcheck source=../../../scripts/lib/treehash.sh
+source "$HARNESS_ROOT/scripts/lib/treehash.sh"
+# shellcheck source=../../../scripts/lib/trace.sh
+source "$HARNESS_ROOT/scripts/lib/trace.sh"
+
+payload="$(cat || true)"
+[[ -z "$payload" ]] && payload="{}"
+root="${VERIFY_ROOT:-$HARNESS_ROOT}"
+harness_config_load "$HARNESS_ROOT"
+
+state_file="$root/.harness/loop-state.json"
+mkdir -p "$root/.harness"
+
+session_id="$(jq -r '.session_id // .sessionId // "local"' <<<"$payload")"
+stop_active="$(jq -r '.stop_hook_active // .stopHookActive // false' <<<"$payload")"
+
+read_state() {
+  if [[ -f "$state_file" ]]; then
+    cat "$state_file"
+  else
+    echo '{}'
+  fi
+}
+
+write_state() {
+  printf '%s\n' "$1" >"$state_file"
+}
+
+state="$(read_state)"
+# Ensure counters exist for this session.
+stop_retries="$(jq -r --arg s "$session_id" '.[$s].stopRetries // 0' <<<"$state" 2>/dev/null || echo 0)"
+review_cycles="$(jq -r --arg s "$session_id" '.[$s].reviewCycles // 0' <<<"$state" 2>/dev/null || echo 0)"
+last_reviewed="$(jq -r --arg s "$session_id" '.[$s].lastReviewedHash // ""' <<<"$state" 2>/dev/null || echo "")"
+
+# Flattened state also supported (loop.sh shape).
+if jq -e '.stopRetries' <<<"$state" >/dev/null 2>&1; then
+  stop_retries="$(jq -r '.stopRetries // 0' <<<"$state")"
+  review_cycles="$(jq -r '.reviewCycles // 0' <<<"$state")"
+  last_reviewed="$(jq -r '.lastReviewedHash // ""' <<<"$state")"
+fi
+
+max_stop="$(harness_config_get verify.maxStopRetries)"
+max_review="$(harness_config_get review.maxCycles)"
+
+deny() {
+  printf '%s\n' "$1"
+  exit 2
+}
+
+# --- Turn tier verify ---
+export VERIFY_ROOT="$root"
+set +e
+"$HARNESS_ROOT/scripts/verify.sh" turn >/tmp/harness-stop-verify.out 2>&1
+verify_ec=$?
+set -e
+report="$root/.verify/report.json"
+failing_stage=""
+if [[ -f "$report" ]]; then
+  failing_stage="$(jq -r '[.stages[]|select(.status=="fail")|.name]|first // empty' "$report")"
+fi
+
+if [[ $verify_ec -ne 0 ]]; then
+  # Increment stop retries.
+  stop_retries=$((stop_retries + 1))
+  state="$(jq -c --argjson n "$stop_retries" '.stopRetries=$n' <<<"$state")"
+  write_state "$state"
+
+  if (( stop_retries > max_stop )); then
+    echo "HUMAN: turn tier still red after ${max_stop} retries. Failing stage: ${failing_stage:-unknown}. Allowing stop." >&2
+    cat /tmp/harness-stop-verify.out >&2 || true
+    exit 0
+  fi
+
+  msg="turn tier failed (attempt ${stop_retries}/${max_stop}). Stage: ${failing_stage:-unknown}."
+  if [[ -f "$report" ]]; then
+    msg="$msg $(jq -r '[.stages[]|select(.status=="fail")|.output]|first // empty' "$report" | head -c 2000)"
+  fi
+  deny "$msg"
+fi
+
+# Reset stop retries on green turn.
+state="$(jq -c '.stopRetries=0' <<<"$state")"
+write_state "$state"
+
+# --- Reviewer ---
+if [[ "$(harness_config_get review.enabled)" != "true" ]]; then
+  exit 0
+fi
+
+if [[ "$(harness_config_get review.requireVerifyGreen)" == "true" && $verify_ec -ne 0 ]]; then
+  exit 0
+fi
+
+current_hash="$(harness_treehash "$root")"
+if [[ -n "$last_reviewed" && "$last_reviewed" == "$current_hash" ]]; then
+  exit 0
+fi
+
+findings='[]'
+# Invocation: HARNESS_REVIEWER_CMD if set, else empty findings (gate still works).
+# Eval and live runners replace this with a real role call.
+if [[ -n "${HARNESS_REVIEWER_CMD:-}" ]]; then
+  set +e
+  findings="$(eval "$HARNESS_REVIEWER_CMD" 2>/dev/null)"
+  set -e
+  if ! jq -e 'type=="array"' <<<"$findings" >/dev/null 2>&1; then
+    findings='[]'
+  fi
+fi
+
+count="$(jq 'length' <<<"$findings")"
+if [[ "$count" -gt 0 && "$review_cycles" -lt "$max_review" ]]; then
+  review_cycles=$((review_cycles + 1))
+  state="$(jq -c --argjson n "$review_cycles" '.reviewCycles=$n' <<<"$state")"
+  write_state "$state"
+  deny "reviewer findings (cycle ${review_cycles}/${max_review}): $(jq -c '.' <<<"$findings")"
+fi
+
+if [[ "$count" -gt 0 && "$review_cycles" -ge "$max_review" ]]; then
+  echo "HUMAN: reviewer still has findings after ${max_review} cycles:" >&2
+  jq '.' <<<"$findings" >&2
+fi
+
+state="$(jq -c --arg h "$current_hash" '.lastReviewedHash=$h | .reviewCycles=0' <<<"$state")"
+write_state "$state"
+
+if [[ "$(harness_config_get trace.enabled)" == "true" ]]; then
+  harness_trace_append "stop" "$(jq -nc --argjson findings "$findings" --arg hash "$current_hash" '{findings:$findings,treeHash:$hash}')"
+fi
+
+exit 0

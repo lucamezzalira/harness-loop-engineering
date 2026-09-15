@@ -6,23 +6,23 @@
   "hooks": {
     "postToolUse": [
       {
-        "command": "env HARNESS_TOOL=cursor ./scripts/hook.sh"
+        "command": "env HARNESS_TOOL=cursor HARNESS_EVENT=post_tool ./scripts/hook.sh"
       }
     ],
     "preToolUse": [
       {
-        "command": "env HARNESS_TOOL=cursor ./scripts/hook.sh",
+        "command": "env HARNESS_TOOL=cursor HARNESS_EVENT=pre_tool ./scripts/hook.sh",
         "failClosed": true
       }
     ],
     "sessionStart": [
       {
-        "command": "env HARNESS_TOOL=cursor ./scripts/hook.sh"
+        "command": "env HARNESS_TOOL=cursor HARNESS_EVENT=session_start ./scripts/hook.sh"
       }
     ],
     "stop": [
       {
-        "command": "env HARNESS_TOOL=cursor ./scripts/hook.sh",
+        "command": "env HARNESS_TOOL=cursor HARNESS_EVENT=stop ./scripts/hook.sh",
         "failClosed": true
       }
     ]

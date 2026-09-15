@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# session_start: print harness status; initialise trace; rotate sessions.
+set -euo pipefail
+HARNESS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+# shellcheck source=../../../scripts/lib/config.sh
+source "$HARNESS_ROOT/scripts/lib/config.sh"
+# shellcheck source=../../../scripts/lib/trace.sh
+source "$HARNESS_ROOT/scripts/lib/trace.sh"
+# shellcheck source=../../../scripts/lib/version.sh
+source "$HARNESS_ROOT/scripts/lib/version.sh"
+
+payload="$(cat || true)"
+[[ -z "$payload" ]] && payload="{}"
+
+harness_config_load "$HARNESS_ROOT"
+harness_trace_init "$HARNESS_ROOT" "$payload"
+
+echo "harness $(harness_version | sed 's/^harness //')" >&2
+echo "stages: $(ls -1 "$HARNESS_ROOT/.verify/stages" 2>/dev/null | tr '\n' ' ')" >&2
+echo "role bindings:" >&2
+yq -o json '.' "$HARNESS_ROOT/eval/models.yaml" | jq -r '
+  .roles as $r | .tiers as $t
+  | $r | to_entries[] | "  \(.key): \(.value) -> \($t[.value].id)"
+' >&2
+echo "adapter freshness: $([[ -f $HARNESS_ROOT/.claude/settings.json ]] && echo ok || echo missing)" >&2
+harness_config_print_resolved >&2
+
+if [[ "$(harness_config_get trace.enabled)" == "true" ]]; then
+  snap="$(harness_trace_snapshot_env "$HARNESS_ROOT")"
+  if [[ "$(harness_config_get trace.level)" == "full" ]]; then
+    snap_file=$(mktemp)
+    raw_file=$(mktemp)
+    printf '%s' "$snap" >"$snap_file"
+    printf '%s' "$payload" >"$raw_file"
+    combined="$(jq -nc --slurpfile snap "$snap_file" --slurpfile raw "$raw_file" \
+      '{env:$snap[0],hook:$raw[0]}')"
+    rm -f "$snap_file" "$raw_file"
+    harness_trace_append "session_start" "$combined" || true
+  else
+    harness_trace_append "session_start" "$snap" || true
+  fi
+fi
+exit 0

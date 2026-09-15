@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# pre_tool: deny writes outside the worktree and destructive shell.
+# On git commit: compare report treeHash against current; honour HARNESS_BYPASS.
+set -euo pipefail
+HARNESS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+# shellcheck source=../../../scripts/lib/config.sh
+source "$HARNESS_ROOT/scripts/lib/config.sh"
+# shellcheck source=../../../scripts/lib/treehash.sh
+source "$HARNESS_ROOT/scripts/lib/treehash.sh"
+
+payload="$(cat || true)"
+[[ -z "$payload" ]] && payload="{}"
+root="${VERIFY_ROOT:-$HARNESS_ROOT}"
+
+tool_name="$(jq -r '.tool_name // .toolName // .tool // empty' <<<"$payload")"
+tool_input="$(jq -c '.tool_input // .toolInput // .input // {}' <<<"$payload")"
+
+deny() {
+  printf '%s\n' "$1"
+  exit 2
+}
+
+bypass_ok() {
+  [[ -n "${HARNESS_BYPASS:-}" ]]
+}
+
+log_bypass() {
+  mkdir -p "$root/.harness"
+  printf '%s\tbypass\t%s\n' "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$HARNESS_BYPASS" >>"$root/.harness/bypass.log"
+}
+
+# Destructive shell patterns.
+command_str="$(jq -r '.command // empty' <<<"$tool_input")"
+if [[ -z "$command_str" ]]; then
+  command_str="$(jq -r 'if type=="string" then . else empty end' <<<"$tool_input")"
+fi
+
+if [[ -n "$command_str" ]]; then
+  case "$command_str" in
+    *'rm -rf /'*|*'rm -rf ~'*|*'rm -rf $HOME'*)
+      deny "destructive shell blocked: ${command_str}"
+      ;;
+  esac
+  if echo "$command_str" | grep -Eq '(^|[[:space:]])git[[:space:]]+push[[:space:]]+.*--force'; then
+    deny "force push blocked"
+  fi
+fi
+
+# Writes outside the worktree (Edit/Write file paths).
+file_path="$(jq -r '.file_path // .filePath // .path // empty' <<<"$tool_input")"
+if [[ -n "$file_path" ]]; then
+  abs="$file_path"
+  if [[ "$file_path" != /* ]]; then
+    abs="$root/$file_path"
+  fi
+  # Resolve .. without requiring the file to exist.
+  abs="$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "$abs")"
+  root_abs="$(cd "$root" && pwd)"
+  case "$abs" in
+    "$root_abs"|"$root_abs"/*) ;;
+    *)
+      deny "write outside worktree blocked: ${file_path}"
+      ;;
+  esac
+fi
+
+# Commit gate.
+is_commit=0
+if echo "$command_str" | grep -Eq '(^|[[:space:]])git[[:space:]]+commit([[:space:]]|$)'; then
+  is_commit=1
+fi
+if [[ "$tool_name" == "Git" ]] && jq -e '.subcommand == "commit" or .action == "commit"' <<<"$tool_input" >/dev/null 2>&1; then
+  is_commit=1
+fi
+
+if [[ $is_commit -eq 1 ]]; then
+  if bypass_ok; then
+    log_bypass
+    # Ask the commit to carry a trailer when git commit is the command.
+    if echo "$command_str" | grep -Eq 'git[[:space:]]+commit' && ! echo "$command_str" | grep -q 'Harness-Bypass'; then
+      # Cannot rewrite the tool call from here portably; log only and allow.
+      # Callers should include: --trailer "Harness-Bypass: $HARNESS_BYPASS"
+      echo "harness: HARNESS_BYPASS set; append trailer Harness-Bypass: ${HARNESS_BYPASS}" >&2
+    fi
+    exit 0
+  fi
+
+  report="$root/.verify/report.json"
+  if [[ ! -f "$report" ]]; then
+    deny "commit denied: no .verify/report.json. Run scripts/verify.sh turn first."
+  fi
+  status="$(jq -r '.status' "$report")"
+  report_hash="$(jq -r '.treeHash' "$report")"
+  current="$(harness_treehash "$root")"
+  if [[ "$status" != "pass" ]]; then
+    deny "commit denied: last verify status is ${status}, not pass."
+  fi
+  if [[ "$report_hash" != "$current" ]]; then
+    deny "commit denied: report treeHash is stale (${report_hash} != ${current}). Re-run verify."
+  fi
+fi
+
+exit 0

@@ -117,25 +117,41 @@ EOF
   _harness_write "$dest" "${body}"$'\n'
 }
 
-hook_cmd_claude='env HARNESS_TOOL=claude ./scripts/hook.sh'
-hook_cmd_cursor='env HARNESS_TOOL=cursor ./scripts/hook.sh'
+hook_cmd_claude_session='env HARNESS_TOOL=claude HARNESS_EVENT=session_start ./scripts/hook.sh'
+hook_cmd_claude_pre='env HARNESS_TOOL=claude HARNESS_EVENT=pre_tool ./scripts/hook.sh'
+hook_cmd_claude_post='env HARNESS_TOOL=claude HARNESS_EVENT=post_tool ./scripts/hook.sh'
+hook_cmd_claude_stop='env HARNESS_TOOL=claude HARNESS_EVENT=stop ./scripts/hook.sh'
+hook_cmd_cursor_session='env HARNESS_TOOL=cursor HARNESS_EVENT=session_start ./scripts/hook.sh'
+hook_cmd_cursor_pre='env HARNESS_TOOL=cursor HARNESS_EVENT=pre_tool ./scripts/hook.sh'
+hook_cmd_cursor_post='env HARNESS_TOOL=cursor HARNESS_EVENT=post_tool ./scripts/hook.sh'
+hook_cmd_cursor_stop='env HARNESS_TOOL=cursor HARNESS_EVENT=stop ./scripts/hook.sh'
 
-claude_settings="$(jq -n --arg cmd "$hook_cmd_claude" '{
+claude_settings="$(jq -n \
+  --arg s "$hook_cmd_claude_session" \
+  --arg pre "$hook_cmd_claude_pre" \
+  --arg post "$hook_cmd_claude_post" \
+  --arg stop "$hook_cmd_claude_stop" \
+  '{
   hooks: {
-    SessionStart: [ { hooks: [ { type: "command", command: $cmd } ] } ],
-    PreToolUse:   [ { hooks: [ { type: "command", command: $cmd } ] } ],
-    PostToolUse:  [ { hooks: [ { type: "command", command: $cmd } ] } ],
-    Stop:         [ { hooks: [ { type: "command", command: $cmd } ] } ]
+    SessionStart: [ { hooks: [ { type: "command", command: $s } ] } ],
+    PreToolUse:   [ { hooks: [ { type: "command", command: $pre } ] } ],
+    PostToolUse:  [ { hooks: [ { type: "command", command: $post } ] } ],
+    Stop:         [ { hooks: [ { type: "command", command: $stop } ] } ]
   }
 }')"
 
-cursor_hooks="$(jq -n --arg cmd "$hook_cmd_cursor" '{
+cursor_hooks="$(jq -n \
+  --arg s "$hook_cmd_cursor_session" \
+  --arg pre "$hook_cmd_cursor_pre" \
+  --arg post "$hook_cmd_cursor_post" \
+  --arg stop "$hook_cmd_cursor_stop" \
+  '{
   version: 1,
   hooks: {
-    sessionStart: [ { command: $cmd } ],
-    preToolUse:   [ { command: $cmd, failClosed: true } ],
-    postToolUse:  [ { command: $cmd } ],
-    stop:         [ { command: $cmd, failClosed: true } ]
+    sessionStart: [ { command: $s } ],
+    preToolUse:   [ { command: $pre, failClosed: true } ],
+    postToolUse:  [ { command: $post } ],
+    stop:         [ { command: $stop, failClosed: true } ]
   }
 }')"
 
