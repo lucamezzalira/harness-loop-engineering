@@ -1,0 +1,11 @@
+node_modules/
+.verify/report.json
+.harness/
+harness.config.local.yaml
+coverage/
+dist/
+*.tsbuildinfo
+.DS_Store
+.env
+.env.*
+!.env.example

@@ -1,0 +1,23 @@
+{
+  "name": "harness-loop-engineering",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reference implementation of an agentic coding harness. Template you copy, not a package you install.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@mermaid-js/mermaid-cli": "^11.17.0",
+    "@stryker-mutator/core": "^10.0.0",
+    "@stryker-mutator/vitest-runner": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.70.0",
+    "@typescript-eslint/parser": "^8.70.0",
+    "dependency-cruiser": "^18.3.1",
+    "eslint": "^10.10.0",
+    "prettier": "^3.9.6",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.1"
+  }
+}

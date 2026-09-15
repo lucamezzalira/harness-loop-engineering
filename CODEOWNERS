@@ -1,0 +1,6 @@
+# A one line change to models.yaml alters behaviour and cost for everyone.
+# The same is true of stages, role prompts, and harness defaults.
+eval/models.yaml @lucamezzalira
+.verify/stages/ @lucamezzalira
+agents/ @lucamezzalira
+harness.config.yaml @lucamezzalira
