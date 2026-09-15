@@ -45,6 +45,19 @@ if [[ ! -t 0 ]]; then
   fi
 fi
 
-# T08 fills in normalisation and dispatch. Loading config is enough for T03.
+# T08 fills in normalisation and dispatch. Until then, allow every event with
+# a dialect-correct verdict so failClosed adapters do not brick the workspace.
 echo "hook: config loaded (review.enabled=$(harness_config_get review.enabled) from $(harness_config_source review.enabled))" >&2
+tool="${HARNESS_TOOL:-}"
+case "$tool" in
+  cursor)
+    printf '%s\n' '{"permission":"allow"}'
+    ;;
+  claude)
+    printf '%s\n' '{"continue":true}'
+    ;;
+  *)
+    printf '%s\n' '{"permission":"allow"}'
+    ;;
+esac
 exit 0

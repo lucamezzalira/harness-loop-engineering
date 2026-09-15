@@ -1,0 +1,44 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "env HARNESS_TOOL=claude ./scripts/hook.sh",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "env HARNESS_TOOL=claude ./scripts/hook.sh",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "env HARNESS_TOOL=claude ./scripts/hook.sh",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "env HARNESS_TOOL=claude ./scripts/hook.sh",
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  }
+}
