@@ -1,0 +1,68 @@
+# harness.config.yaml
+# Single source of harness behaviour. Entirely optional: delete this file and
+# everything runs on defaults, except scripts/loop.sh which requires the two
+# fields marked REQUIRED below.
+# Read fresh by every hook process, so edits apply on the next event.
+# Precedence: harness.config.local.yaml > this file > built-in defaults.
+
+trace:
+  # Master switch for reasoning and event logs. Off by default because level
+  # "full" captures source code and prompt text.
+  enabled: false
+  # events: lifecycle, decisions, verdicts, verify results, todo transitions.
+  # full:   the above plus tool call payloads and file contents.
+  level: events
+  # Sessions kept under .harness/trace before oldest-first deletion.
+  retainSessions: 10
+
+review:
+  # Whether the reviewer role runs on real work at end of turn.
+  # This is unrelated to eval/, which scores roles on demand against seeded tasks.
+  enabled: true
+  # How many times the reviewer may send the agent back within one turn before
+  # the harness gives up and surfaces the remaining findings to the human.
+  maxCycles: 2
+  # Skip review when the turn tier is red. Reviewing code that does not compile
+  # spends money to rediscover what verify already said.
+  requireVerifyGreen: true
+
+verify:
+  # Stop at the first failing stage. False runs every stage, which CI wants and
+  # an agent does not, since nine failures at once invite fixing the wrong one.
+  failFast: true
+  # How many times the stop hook may block on a red turn tier before allowing
+  # the stop and escalating to the human.
+  maxStopRetries: 2
+  # Budget for the edit tier. A stage exceeding it is recorded as a budget
+  # breach, because edit tier slowness is what quietly stops agents verifying.
+  editTierBudgetMs: 1000
+
+loop:
+  # Applies to scripts/loop.sh only. Hooks and standalone verify ignore this.
+
+  # REQUIRED. Path to a PRD file, or a one-line objective in quotes.
+  goal: docs/prd/example.md
+  # REQUIRED. Hard stop in agent turns, counted at the stop event. Verification
+  # retries and reviewer cycles happen inside a turn and do not count toward it,
+  # so one turn can contain several agent responses.
+  maxTurns: 20
+
+  # Budgets below default to a value rather than to unlimited. maxTurns is the
+  # brake you must state; these are brakes already engaged that you may release.
+  # The first budget reached stops the loop.
+  maxSeconds: 1800
+  maxCostUsd: 5.00
+
+  # Where the human is asked.
+  #   never      fully autonomous
+  #   each-turn  confirm before every turn
+  #   on-commit  run freely, confirm before the commit lands
+  gate: on-commit
+
+  # Consecutive turns with the same failing stage and an unchanged tree hash
+  # before the loop concludes the agent is stuck rather than working.
+  stopOnIdenticalFailures: 2
+
+  # Ask before resuming onto a tree that changed since the loop stopped. Silent
+  # resumption onto a moved tree is the worst failure this system can produce.
+  confirmOnTreeDrift: true
