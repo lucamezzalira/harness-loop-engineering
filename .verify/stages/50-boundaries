@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# 50-boundaries: depcruise --validate
+set -euo pipefail
+command -v npx >/dev/null || exit 2
+root="${VERIFY_ROOT:-$PWD}"
+cd "$root"
+cfg=""
+for c in .dependency-cruiser.cjs .dependency-cruiser.js dependency-cruiser.config.js; do
+  if [[ -f "$c" ]]; then
+    cfg="$c"
+    break
+  fi
+done
+if [[ -z "$cfg" ]]; then
+  echo "no dependency-cruiser config in ${root}" >&2
+  exit 2
+fi
+npx --no-install depcruise --config "$cfg" --validate "$cfg" src

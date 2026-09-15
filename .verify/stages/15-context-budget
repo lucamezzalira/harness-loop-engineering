@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# 15-context-budget: fail when AGENTS.md or a rendered agent exceeds a token budget.
+# Rough tokens = ceil(chars / 4). A repo that argues context bloat costs success
+# rate should prove it practises that.
+set -euo pipefail
+command -v awk >/dev/null || exit 2
+root="${VERIFY_ROOT:-$PWD}"
+AGENTS_BUDGET=800
+AGENT_BUDGET=1200
+
+tokens() {
+  local chars
+  chars=$(wc -c <"$1" | tr -d ' ')
+  awk -v c="$chars" 'BEGIN { print int((c + 3) / 4) }'
+}
+
+fail=0
+agents="$root/AGENTS.md"
+if [[ -f "$agents" ]]; then
+  t=$(tokens "$agents")
+  if (( t > AGENTS_BUDGET )); then
+    echo "AGENTS.md is ${t} tokens (budget ${AGENTS_BUDGET})"
+    fail=1
+  fi
+fi
+
+for dir in "$root/.claude/agents" "$root/.cursor/agents" "$root/agents"; do
+  [[ -d "$dir" ]] || continue
+  for f in "$dir"/*.md; do
+    [[ -f "$f" ]] || continue
+    case "$f" in
+      *.rationale.md) continue ;;
+    esac
+    t=$(tokens "$f")
+    if (( t > AGENT_BUDGET )); then
+      echo "${f#$root/} is ${t} tokens (budget ${AGENT_BUDGET})"
+      fail=1
+    fi
+  done
+done
+
+exit "$fail"

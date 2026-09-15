@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# 70-build: tsc -b (full project build, commit tier)
+set -euo pipefail
+command -v npx >/dev/null || exit 2
+root="${VERIFY_ROOT:-$PWD}"
+cd "$root"
+if [[ ! -f tsconfig.json ]]; then
+  echo "no tsconfig.json in ${root}" >&2
+  exit 2
+fi
+npx --no-install tsc -b

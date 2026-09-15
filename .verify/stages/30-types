@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# 30-types: tsc -b --incremental
+# Assumes project references (or a single composite tsconfig) so the changed
+# package and its dependents are checked rather than the world. A naive
+# tsc --noEmit on a real monorepo takes minutes and the first engineer who
+# tries it concludes the whole approach does not scale.
+set -euo pipefail
+command -v npx >/dev/null || exit 2
+root="${VERIFY_ROOT:-$PWD}"
+cd "$root"
+if [[ ! -f tsconfig.json ]]; then
+  echo "no tsconfig.json in ${root}" >&2
+  exit 2
+fi
+npx --no-install tsc -b --incremental

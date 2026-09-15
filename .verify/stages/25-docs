@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# 25-docs: validate every Mermaid block in markdown parses.
+set -euo pipefail
+command -v npx >/dev/null || exit 2
+command -v python3 >/dev/null || exit 2
+root="${VERIFY_ROOT:-$PWD}"
+cd "$root"
+
+md_list=$(mktemp)
+trap 'rm -f "$md_list"' EXIT
+
+if [[ -n "${VERIFY_CHANGED_FILES:-}" ]]; then
+  printf '%s\n' "$VERIFY_CHANGED_FILES" | grep -E '\.md$' >"$md_list" || true
+else
+  find . -name '*.md' \
+    -not -path './node_modules/*' \
+    -not -path './.harness/*' \
+    -not -path './examples/*' \
+    -not -path './.git/*' >"$md_list" 2>/dev/null || true
+fi
+
+if [[ ! -s "$md_list" ]]; then
+  exit 0
+fi
+
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"; rm -f "$md_list"' EXIT
+fail=0
+idx=0
+
+while IFS= read -r md; do
+  [[ -f "$md" ]] || continue
+  python3 - "$md" "$tmpdir" <<'PY' || fail=1
+import re, sys, subprocess, pathlib
+md = pathlib.Path(sys.argv[1])
+tmpdir = pathlib.Path(sys.argv[2])
+text = md.read_text(encoding="utf-8")
+blocks = re.findall(r"```mermaid\n(.*?)```", text, re.S)
+fail = 0
+for i, block in enumerate(blocks, 1):
+    infile = tmpdir / f"{md.name}-{i}.mmd"
+    outfile = tmpdir / f"{md.name}-{i}.svg"
+    infile.write_text(block, encoding="utf-8")
+    proc = subprocess.run(
+        ["npx", "--no-install", "mmdc", "-i", str(infile), "-o", str(outfile), "-q"],
+        capture_output=True, text=True,
+    )
+    if proc.returncode != 0:
+        print(f"Mermaid parse failed in {md} (block {i}):")
+        print(proc.stderr or proc.stdout)
+        fail = 1
+sys.exit(fail)
+PY
+done <"$md_list"
+
+exit "$fail"

@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# 20-lint: eslint. Single file in edit tier.
+set -euo pipefail
+command -v npx >/dev/null || exit 2
+root="${VERIFY_ROOT:-$PWD}"
+cd "$root"
+if [[ -n "${VERIFY_CHANGED_FILES:-}" ]]; then
+  args=()
+  while IFS= read -r f; do
+    [[ -z "$f" ]] && continue
+    case "$f" in
+      *.ts|*.tsx|*.js|*.jsx|*.mjs|*.cjs) args+=("$f") ;;
+    esac
+  done <<<"$VERIFY_CHANGED_FILES"
+  if [[ ${#args[@]} -eq 0 ]]; then
+    exit 0
+  fi
+  npx --no-install eslint -- "${args[@]}"
+else
+  npx --no-install eslint "src/"
+fi

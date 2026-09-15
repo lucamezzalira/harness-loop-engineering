@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# 90-suite: vitest run --coverage
+set -euo pipefail
+command -v npx >/dev/null || exit 2
+root="${VERIFY_ROOT:-$PWD}"
+cd "$root"
+if [[ ! -f vitest.config.ts && ! -f vitest.config.js && ! -f vitest.config.mts ]]; then
+  echo "no vitest config in ${root}" >&2
+  exit 2
+fi
+npx --no-install vitest run --coverage

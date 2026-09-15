@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# 80-deps.advisory: npm audit --audit-level=high
+# Advisory: non-zero is warn in the report and does not gate the overall status.
+set -euo pipefail
+command -v npm >/dev/null || exit 2
+root="${VERIFY_ROOT:-$PWD}"
+cd "$root"
+npm audit --audit-level=high

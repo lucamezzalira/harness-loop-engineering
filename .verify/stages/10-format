@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# 10-format: prettier --check. Assert only. Auto-fix belongs in post_tool.
+set -euo pipefail
+command -v npx >/dev/null || exit 2
+root="${VERIFY_ROOT:-$PWD}"
+cd "$root"
+if [[ -n "${VERIFY_CHANGED_FILES:-}" ]]; then
+  args=()
+  while IFS= read -r f; do
+    [[ -z "$f" ]] && continue
+    case "$f" in
+      *.ts|*.tsx|*.js|*.jsx|*.mjs|*.cjs|*.json|*.md|*.yml|*.yaml) args+=("$f") ;;
+    esac
+  done <<<"$VERIFY_CHANGED_FILES"
+  if [[ ${#args[@]} -eq 0 ]]; then
+    exit 0
+  fi
+  npx --no-install prettier --check -- "${args[@]}"
+else
+  npx --no-install prettier --check \
+    "AGENTS.md" "CLAUDE.md" "README.md" \
+    "package.json" "harness.config.yaml" \
+    "src/**/*.ts" "eslint.config.js" "vitest.config.ts" \
+    ".prettierrc.json" "tsconfig.json"
+fi

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# 40-unit: vitest run --changed
+set -euo pipefail
+command -v npx >/dev/null || exit 2
+root="${VERIFY_ROOT:-$PWD}"
+cd "$root"
+if [[ ! -f vitest.config.ts && ! -f vitest.config.js && ! -f vitest.config.mts ]]; then
+  echo "no vitest config in ${root}" >&2
+  exit 2
+fi
+# --changed needs a git base; fall back to full run when not in a repo with HEAD.
+if git rev-parse --verify HEAD >/dev/null 2>&1; then
+  npx --no-install vitest run --changed
+else
+  npx --no-install vitest run
+fi
