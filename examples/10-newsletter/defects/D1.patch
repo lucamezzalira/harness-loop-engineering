@@ -1,0 +1,31 @@
+--- a/examples/10-newsletter/services/subscription-service/src/subscribe.ts
++++ b/examples/10-newsletter/services/subscription-service/src/subscribe.ts
+@@ -29,7 +29,12 @@
+       email,
+       createdAt: new Date().toISOString(),
+     }
+-    store.insert(subscriber)
++    // D1: check then insert with a yield, and no unique constraint on insert.
++    if (store.hasEmail(email)) {
++      return { ok: false, statusCode: 409, error: `subscriber already exists for ${email}` }
++    }
++    await Promise.resolve()
++    store.insertUnchecked(subscriber)
+ 
+     const event = assertSubscriberConfirmed({
+       type: 'SubscriberConfirmed',
+--- a/examples/10-newsletter/services/subscription-service/src/store.ts
++++ b/examples/10-newsletter/services/subscription-service/src/store.ts
+@@ -27,6 +27,12 @@
+     this.byId.set(subscriber.id, subscriber)
+   }
+ 
++  /** D1 helper: insert without enforcing uniqueness. */
++  insertUnchecked(subscriber: Subscriber): void {
++    this.emails.add(subscriber.email.toLowerCase())
++    this.byId.set(subscriber.id, subscriber)
++  }
++
+   get(id: string): Subscriber | undefined {
+     return this.byId.get(id)
+   }

@@ -1,0 +1,16 @@
+--- a/examples/10-newsletter/services/subscription-service/src/subscribe.ts
++++ b/examples/10-newsletter/services/subscription-service/src/subscribe.ts
+@@ -39,8 +39,11 @@
+       confirmedAt: subscriber.createdAt,
+     })
+ 
+-    // Privacy: log the opaque id, never the address at info level.
+-    log.info('subscriber confirmed', { subscriberId: subscriber.id })
++    // D4: subscriber email written to an info level log line.
++    log.info('subscriber confirmed', {
++      subscriberId: subscriber.id,
++      email: subscriber.email,
++    })
+     await bus.publish(event)
+     return { ok: true, subscriberId: subscriber.id, event }
+   } catch (err) {

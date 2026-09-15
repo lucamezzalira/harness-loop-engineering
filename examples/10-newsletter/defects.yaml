@@ -1,0 +1,51 @@
+# Planted defects for examples/10-newsletter.
+# Doubles as reviewer eval ground truth (file + line range overlap).
+defects:
+  - id: D1
+    category: concurrency
+    severity: high
+    stage: 40-unit
+    file: examples/10-newsletter/services/subscription-service/src/subscribe.ts
+    startLine: 31
+    endLine: 38
+    summary: Double subscribe race: check then insert with no unique constraint
+  - id: D2
+    category: idempotency
+    severity: high
+    stage: 40-unit
+    file: examples/10-newsletter/services/email-service/src/mailer.ts
+    startLine: 26
+    endLine: 33
+    summary: Email send has no idempotency key; retries duplicate the welcome email
+  - id: D3
+    category: boundary
+    severity: high
+    stage: 55-service-boundaries
+    file: examples/10-newsletter/services/email-service/src/handler.ts
+    startLine: 5
+    endLine: 12
+    summary: email-service deep imports a subscription-service internal module
+  - id: D4
+    category: privacy
+    severity: medium
+    stage: 40-unit
+    file: examples/10-newsletter/services/subscription-service/src/subscribe.ts
+    startLine: 37
+    endLine: 44
+    summary: Subscriber email address written to an info level log line
+  - id: D5
+    category: error handling
+    severity: high
+    stage: 40-unit
+    file: examples/10-newsletter/services/email-service/src/handler.ts
+    startLine: 23
+    endLine: 30
+    summary: Failed send swallows the error and acks the event, losing the message
+  - id: D6
+    category: validation
+    severity: high
+    stage: 40-unit
+    file: examples/10-newsletter/services/subscription-service/src/validate.ts
+    startLine: 12
+    endLine: 19
+    summary: Address validation accepts a string that throws in the mail transport

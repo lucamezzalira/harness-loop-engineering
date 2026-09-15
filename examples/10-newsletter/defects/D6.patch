@@ -1,0 +1,14 @@
+--- a/examples/10-newsletter/services/subscription-service/src/validate.ts
++++ b/examples/10-newsletter/services/subscription-service/src/validate.ts
+@@ -10,9 +10,8 @@
+     throw new ValidationError('email is required')
+   }
+   const trimmed = email.trim()
+-  if (!isPlausibleEmail(trimmed)) {
+-    throw new ValidationError('email is not a valid address')
+-  }
++  // D6: accept any non-empty string, including values that throw in the mail transport.
++  void isPlausibleEmail
+   return trimmed
+ }
+ 

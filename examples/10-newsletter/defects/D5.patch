@@ -1,0 +1,16 @@
+--- a/examples/10-newsletter/services/email-service/src/handler.ts
++++ b/examples/10-newsletter/services/email-service/src/handler.ts
+@@ -21,12 +21,11 @@
+       await mailer.sendWelcome(confirmed.id, confirmed.email)
+       log.info('welcome email sent', { eventId: confirmed.id })
+     } catch (err) {
++      // D5: swallow the error and ack the event, losing the message.
+       log.error('welcome email failed', {
+         eventId: confirmed.id,
+         error: err instanceof Error ? err.message : String(err),
+       })
+-      // Re-throw so the publisher / poller can retry. Acks happen only on success.
+-      throw err
+     }
+   })
+ }

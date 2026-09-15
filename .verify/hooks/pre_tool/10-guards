@@ -46,23 +46,26 @@ if [[ -n "$command_str" ]]; then
   fi
 fi
 
-# Writes outside the worktree (Edit/Write file paths).
+# Writes outside the worktree (Edit/Write file paths only).
 file_path="$(jq -r '.file_path // .filePath // .path // empty' <<<"$tool_input")"
-if [[ -n "$file_path" ]]; then
-  abs="$file_path"
-  if [[ "$file_path" != /* ]]; then
-    abs="$root/$file_path"
-  fi
-  # Resolve .. without requiring the file to exist.
-  abs="$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "$abs")"
-  root_abs="$(cd "$root" && pwd)"
-  case "$abs" in
-    "$root_abs"|"$root_abs"/*) ;;
-    *)
-      deny "write outside worktree blocked: ${file_path}"
-      ;;
-  esac
-fi
+case "$tool_name" in
+  Edit|Write|edit|write|StrReplace|search_replace|AfterEdit*|afterFileEdit)
+    if [[ -n "$file_path" ]]; then
+      abs="$file_path"
+      if [[ "$file_path" != /* ]]; then
+        abs="$root/$file_path"
+      fi
+      abs="$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "$abs")"
+      root_abs="$(cd "$root" && pwd)"
+      case "$abs" in
+        "$root_abs"|"$root_abs"/*) ;;
+        *)
+          deny "write outside worktree blocked: ${file_path}"
+          ;;
+      esac
+    fi
+    ;;
+esac
 
 # Commit gate.
 is_commit=0

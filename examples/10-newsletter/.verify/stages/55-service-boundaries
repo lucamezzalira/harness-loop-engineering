@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# 55-service-boundaries: depcruise rules forbidding cross-service imports.
+# Only packages/contracts is a permitted dependency between the two services.
+set -euo pipefail
+command -v npx >/dev/null || exit 2
+root="${VERIFY_ROOT:-$PWD}"
+news="$root/examples/10-newsletter"
+if [[ ! -f "$news/.dependency-cruiser.cjs" ]]; then
+  echo "missing $news/.dependency-cruiser.cjs" >&2
+  exit 2
+fi
+cd "$news"
+npx --no-install depcruise --config .dependency-cruiser.cjs --validate .dependency-cruiser.cjs \
+  services packages

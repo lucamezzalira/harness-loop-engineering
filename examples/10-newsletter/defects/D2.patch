@@ -1,0 +1,21 @@
+--- a/examples/10-newsletter/services/email-service/src/mailer.ts
++++ b/examples/10-newsletter/services/email-service/src/mailer.ts
+@@ -24,15 +24,14 @@
+   constructor(private readonly transport: MailTransport) {}
+ 
+   async sendWelcome(idempotencyKey: string, to: string): Promise<void> {
+-    if (this.sent.has(idempotencyKey)) {
+-      return
+-    }
++    // D2: ignore idempotency key; retries duplicate the welcome email.
++    void idempotencyKey
+     await this.transport.send({
+       to,
+       subject: 'Welcome to the newsletter',
+       body: 'Thanks for confirming your subscription.',
+     })
+-    this.sent.add(idempotencyKey)
++    this.sent.add(`${to}:${Date.now()}:${Math.random()}`)
+   }
+ 
+   sentCount(): number {

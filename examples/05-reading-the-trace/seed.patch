@@ -1,0 +1,12 @@
+--- a/harness.config.yaml
++++ b/harness.config.yaml
+@@ -8,7 +8,8 @@
+ trace:
+   # Master switch for reasoning and event logs. Off by default because level
+   # "full" captures source code and prompt text.
+-  enabled: false
++  # Lesson 05: events on so a failed turn leaves a readable trail under .harness/trace.
++  enabled: true
+   # events: lifecycle, decisions, verdicts, verify results, todo transitions.
+   # full:   the above plus tool call payloads and file contents.
+   level: events

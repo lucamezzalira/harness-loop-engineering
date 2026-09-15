@@ -1,0 +1,52 @@
+name: verify
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install jq and yq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+      - name: Setup
+        run: scripts/setup.sh
+      - name: Adapter freshness
+        run: adapters/render.sh --check
+      - name: CI local config (failFast false)
+        run: |
+          cat > harness.config.local.yaml <<'EOF'
+          verify:
+            failFast: false
+          EOF
+      - name: Verify commit tier
+        run: scripts/verify.sh commit
+      - name: Portable hooks only
+        run: |
+          # Enforce that nothing outside optional/ depends on a non-portable event.
+          if grep -RInE 'SubagentStop|sessionEnd|UserPromptSubmit|beforeSubmitPrompt' \
+            .verify/hooks/session_start .verify/hooks/pre_tool .verify/hooks/post_tool .verify/hooks/stop \
+            2>/dev/null; then
+            echo "non-portable event reference outside optional/" >&2
+            exit 1
+          fi
+      - name: Eval replay
+        run: chmod +x eval/run.sh && eval/run.sh
+      - name: Bypass summary
+        run: |
+          if [[ -f .harness/bypass.log ]]; then
+            echo "## Harness bypasses" >> "$GITHUB_STEP_SUMMARY"
+            cat .harness/bypass.log >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No bypasses recorded" >> "$GITHUB_STEP_SUMMARY"
+          fi

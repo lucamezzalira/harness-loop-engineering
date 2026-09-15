@@ -1,0 +1,36 @@
+--- a/.verify/hooks/pre_tool/10-guards
++++ b/.verify/hooks/pre_tool/10-guards
+@@ -74,9 +74,30 @@
+ fi
+ 
+ if [[ $is_commit -eq 1 ]]; then
+-  # Lesson 04 soft path: commit gate disabled so the agent can skip verify.
+-  echo "harness: commit gate soft (04-enforcement seed)" >&2
+-  exit 0
++  if bypass_ok; then
++    log_bypass
++    # Ask the commit to carry a trailer when git commit is the command.
++    if echo "$command_str" | grep -Eq 'git[[:space:]]+commit' && ! echo "$command_str" | grep -q 'Harness-Bypass'; then
++      # Cannot rewrite the tool call from here portably; log only and allow.
++      # Callers should include: --trailer "Harness-Bypass: $HARNESS_BYPASS"
++      echo "harness: HARNESS_BYPASS set; append trailer Harness-Bypass: ${HARNESS_BYPASS}" >&2
++    fi
++    exit 0
++  fi
++
++  report="$root/.verify/report.json"
++  if [[ ! -f "$report" ]]; then
++    deny "commit denied: no .verify/report.json. Run scripts/verify.sh turn first."
++  fi
++  status="$(jq -r '.status' "$report")"
++  report_hash="$(jq -r '.treeHash' "$report")"
++  current="$(harness_treehash "$root")"
++  if [[ "$status" != "pass" ]]; then
++    deny "commit denied: last verify status is ${status}, not pass."
++  fi
++  if [[ "$report_hash" != "$current" ]]; then
++    deny "commit denied: report treeHash is stale (${report_hash} != ${current}). Re-run verify."
++  fi
+ fi
+ 
+ exit 0

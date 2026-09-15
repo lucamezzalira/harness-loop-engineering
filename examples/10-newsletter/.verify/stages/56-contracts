@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# 56-contracts: emitted SubscriberConfirmed events match the shared schema.
+# One tool call: vitest, scoped to the contracts assertions in newsletter.test.ts.
+set -euo pipefail
+command -v npx >/dev/null || exit 2
+root="${VERIFY_ROOT:-$PWD}"
+cd "$root"
+if [[ ! -f examples/10-newsletter/newsletter.test.ts ]]; then
+  echo "missing newsletter tests" >&2
+  exit 2
+fi
+npx --no-install vitest run examples/10-newsletter/newsletter.test.ts -t 'contracts'

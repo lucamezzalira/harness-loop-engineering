@@ -208,10 +208,11 @@ run_stage() {
 
 echo "verify: tier=${tier} root=${VERIFY_ROOT} stages=${VERIFY_STAGES}" >&2
 
-# Numeric order by filename.
+# Numeric order by filename. -L follows symlinks so example stage dirs can
+# link to the generic set (find -type f otherwise skips symlink entries).
 stage_list=$(mktemp)
 trap 'rm -f "$stages_tmp" "$stage_list"' EXIT
-find "$VERIFY_STAGES" -maxdepth 1 -type f \( -perm -100 -o -perm -10 -o -perm -1 \) \
+find -L "$VERIFY_STAGES" -maxdepth 1 -type f \( -perm -100 -o -perm -10 -o -perm -1 \) \
   | while IFS= read -r p; do basename "$p"; done \
   | sort \
   | while IFS= read -r base; do printf '%s\n' "$VERIFY_STAGES/$base"; done \
@@ -219,7 +220,7 @@ find "$VERIFY_STAGES" -maxdepth 1 -type f \( -perm -100 -o -perm -10 -o -perm -1
 
 # find -perm portability: also include all non-hidden files and chmod +x expectation.
 if [[ ! -s "$stage_list" ]]; then
-  find "$VERIFY_STAGES" -maxdepth 1 -type f ! -name '.*' ! -name '*.md' \
+  find -L "$VERIFY_STAGES" -maxdepth 1 -type f ! -name '.*' ! -name '*.md' \
     | while IFS= read -r p; do basename "$p"; done \
     | sort \
     | while IFS= read -r base; do printf '%s\n' "$VERIFY_STAGES/$base"; done \
