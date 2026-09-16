@@ -1,0 +1,4 @@
+The newsletter example under examples/10-newsletter has several defects in the
+subscription and welcome-email path. Fix them so a subscriber gets exactly one
+welcome email, boundaries between services hold, and nothing sensitive leaks
+into logs. Use the shell. Do not assume project instructions beyond this message.

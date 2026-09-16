@@ -45,14 +45,15 @@ MODELS="$HARNESS_ROOT/eval/models.yaml"
 RESULTS="$HARNESS_ROOT/eval/results/runs.jsonl"
 BASELINE="$HARNESS_ROOT/eval/results/baseline.json"
 FIXTURES="$HARNESS_ROOT/eval/fixtures"
+FORMAT_TASK="$HARNESS_ROOT/eval/tasks/component/reviewer-output-format"
 mkdir -p "$FIXTURES" "$(dirname "$RESULTS")"
 
 harness_ver="$(harness_version | sed 's/^harness //')"
 live="${HARNESS_EVAL_LIVE:-0}"
 
 roles="$(yq -o json '.' "$MODELS" | jq -c '.roles | keys')"
-# Component tasks: reviewer against newsletter defects.
-tasks='["newsletter-reviewer"]'
+# Component tasks: reviewer against newsletter defects, plus output-format arms.
+tasks='["newsletter-reviewer","reviewer-output-format"]'
 repeats=3
 
 fixture_key() {
@@ -85,6 +86,30 @@ print(json.dumps({"precision":precision,"recall":recall,"falsePositives":fp,"tp"
 PY
 }
 
+score_prose() {
+  local prose_file=$1
+  local mapping_file=$2
+  python3 - "$prose_file" "$mapping_file" "$HARNESS_ROOT/examples/10-newsletter/defects.json" <<'PY'
+import json, sys
+prose = json.load(open(sys.argv[1]))
+mapping = json.load(open(sys.argv[2]))["findings"]
+defects = json.load(open(sys.argv[3]))["defects"]
+defect_ids = {d["id"] for d in defects}
+matched=set(); fp=0
+for key in prose.get("keys") or []:
+    did = mapping.get(key)
+    if did and did in defect_ids:
+        matched.add(did)
+    else:
+        fp += 1
+tp=len(matched)
+fn=len(defects)-tp
+precision = tp/(tp+fp) if (tp+fp) else 1.0
+recall = tp/len(defects) if defects else 1.0
+print(json.dumps({"precision":precision,"recall":recall,"falsePositives":fp,"tp":tp,"fn":fn,"matched":sorted(matched)}))
+PY
+}
+
 compare_baseline() {
   local role=$1 metrics=$2
   if [[ ! -f "$BASELINE" ]]; then
@@ -97,7 +122,6 @@ base=json.load(open(sys.argv[1]))
 role=sys.argv[2]
 m=json.loads(sys.argv[3])
 b=base.get("roles",{}).get(role,{})
-# Simple threshold: recall drop > 0.2 => meaningfully worse
 br=b.get("recall", m.get("recall",0))
 mr=m.get("recall",0)
 if mr < br - 0.2:
@@ -109,9 +133,25 @@ else:
 PY
 }
 
+append_run() {
+  local role=$1 model=$2 repeat=$3 metrics=$4 task=$5
+  jq -nc \
+    --arg role "$role" \
+    --arg model "$model" \
+    --arg harnessVersion "$harness_ver" \
+    --argjson repeat "$repeat" \
+    --argjson wallClockSeconds 12 \
+    --argjson tokenCostUsd 0.02 \
+    --argjson metrics "$metrics" \
+    --arg invocation "direct" \
+    --arg task "$task" \
+    --arg ts "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+    '{ts:$ts,task:$task,role:$role,model:$model,harnessVersion:$harnessVersion,repeat:$repeat,wallClockSeconds:$wallClockSeconds,tokenCostUsd:$tokenCostUsd,invocation:$invocation,metrics:$metrics}' \
+    >>"$RESULTS"
+}
+
 echo "eval: replay=$([[ "$live" == "1" ]] && echo no || echo yes) harness=${harness_ver}" >&2
 
-# Ensure baseline exists for comparison demos.
 if [[ ! -f "$BASELINE" ]]; then
   cat >"$BASELINE" <<'EOF'
 {
@@ -157,7 +197,6 @@ yq -o json '.' "$MODELS" | jq -r '.roles | to_entries[] | "\(.key)\t\(.value)"' 
   model="$(yq -o json '.' "$MODELS" | jq -r --arg t "$tier" '.tiers[$t].id')"
   case "$role" in
     reviewer)
-      # Aggregate across repeats
       metrics_list='[]'
       for repeat in 0 1 2; do
         key="$(fixture_key newsletter-reviewer reviewer "$model" "$repeat")"
@@ -165,28 +204,9 @@ yq -o json '.' "$MODELS" | jq -r '.roles | to_entries[] | "\(.key)\t\(.value)"' 
         if [[ ! -f "$fix" ]]; then
           echo "[]" >"$fix"
         fi
-        # Convert defects.yaml matching without requiring pyyaml if needed
-        if python3 -c 'import json' 2>/dev/null; then
-          m="$(score_reviewer "$fix")"
-        else
-          m="$(jq -nc --argjson n "$(jq 'length' "$fix")" '{precision:1,recall:($n/6),falsePositives:0,tp:$n,fn:(6-$n),matched:[]}')"
-        fi
+        m="$(score_reviewer "$fix")"
         metrics_list="$(jq -c --argjson m "$m" '. + [$m]' <<<"$metrics_list")"
-
-        wall=12
-        cost=0.02
-        jq -nc \
-          --arg role "$role" \
-          --arg model "$model" \
-          --arg harnessVersion "$harness_ver" \
-          --argjson repeat "$repeat" \
-          --argjson wallClockSeconds "$wall" \
-          --argjson tokenCostUsd "$cost" \
-          --argjson metrics "$m" \
-          --arg invocation "direct" \
-          --arg ts "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-          '{ts:$ts,role:$role,model:$model,harnessVersion:$harnessVersion,repeat:$repeat,wallClockSeconds:$wallClockSeconds,tokenCostUsd:$tokenCostUsd,invocation:$invocation,metrics:$metrics}' \
-          >>"$RESULTS"
+        append_run "$role" "$model" "$repeat" "$m" "newsletter-reviewer"
       done
       avg="$(jq -c '{
         precision: ([.[].precision]|add/length),
@@ -201,6 +221,40 @@ yq -o json '.' "$MODELS" | jq -r '.roles | to_entries[] | "\(.key)\t\(.value)"' 
       ;;
   esac
 done
+
+# --- Output-format experiment (JSON contract vs prose) ---
+echo
+echo "output-format arm   recall  matched"
+echo "------------------- ------- --------------------"
+model="$(yq -o json '.' "$MODELS" | jq -r '.tiers[.roles.reviewer].id')"
+mapping="$FORMAT_TASK/mapping.json"
+
+json_metrics='[]'
+prose_metrics='[]'
+for repeat in 0 1 2; do
+  jfix="$FORMAT_TASK/fixtures/json-${repeat}.json"
+  pfix="$FORMAT_TASK/fixtures/prose-${repeat}.json"
+  jm="$(score_reviewer "$jfix")"
+  pm="$(score_prose "$pfix" "$mapping")"
+  json_metrics="$(jq -c --argjson m "$jm" '. + [$m]' <<<"$json_metrics")"
+  prose_metrics="$(jq -c --argjson m "$pm" '. + [$m]' <<<"$prose_metrics")"
+  append_run "reviewer" "$model" "$repeat" "$jm" "reviewer-output-format-json"
+  append_run "reviewer" "$model" "$repeat" "$pm" "reviewer-output-format-prose"
+done
+
+json_avg="$(jq -c '{
+  precision: ([.[].precision]|add/length),
+  recall: ([.[].recall]|add/length),
+  matched: (.[0].matched // [])
+}' <<<"$json_metrics")"
+prose_avg="$(jq -c '{
+  precision: ([.[].precision]|add/length),
+  recall: ([.[].recall]|add/length),
+  matched: (.[0].matched // [])
+}' <<<"$prose_metrics")"
+
+printf '%-19s %-7.2f %s\n' "json-contract" "$(jq -r '.recall' <<<"$json_avg")" "$(jq -r '.matched|join(",")' <<<"$json_avg")"
+printf '%-19s %-7.2f %s\n' "prose" "$(jq -r '.recall' <<<"$prose_avg")" "$(jq -r '.matched|join(",")' <<<"$prose_avg")"
 
 echo
 echo "eval: wrote rows to eval/results/runs.jsonl"

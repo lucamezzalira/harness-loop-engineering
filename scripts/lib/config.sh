@@ -31,7 +31,8 @@ HARNESS_DEFAULTS_JSON='{
     "maxCostUsd": 5.00,
     "gate": "on-commit",
     "stopOnIdenticalFailures": 2,
-    "confirmOnTreeDrift": true
+    "confirmOnTreeDrift": true,
+    "enumerateFirst": true
   }
 }'
 
@@ -95,6 +96,7 @@ _harness_setting_because() {
     loop.gate) echo "it chooses where the human is asked: never, each-turn, or on-commit" ;;
     loop.stopOnIdenticalFailures) echo "it is how the loop concludes the agent is stuck rather than working" ;;
     loop.confirmOnTreeDrift) echo "silent resumption onto a moved tree is the worst failure this system can produce" ;;
+    loop.enumerateFirst) echo "a fresh loop needs features.json before it implements, or later sessions invent done" ;;
     *) echo "the harness cannot interpret a value of the wrong type" ;;
   esac
 }
@@ -124,7 +126,7 @@ _harness_validate_value() {
   actual="$(jq -c '.' <<<"$json_val")"
 
   case "$key" in
-    trace.enabled|review.enabled|review.requireVerifyGreen|verify.failFast|loop.confirmOnTreeDrift)
+    trace.enabled|review.enabled|review.requireVerifyGreen|verify.failFast|loop.confirmOnTreeDrift|loop.enumerateFirst)
       [[ "$typ" == "boolean" ]] || _harness_config_type_error "$key" "boolean" "$actual"
       ;;
     trace.retainSessions|review.maxCycles|verify.maxStopRetries|verify.editTierBudgetMs|loop.maxTurns|loop.maxSeconds|loop.stopOnIdenticalFailures)
@@ -236,7 +238,7 @@ harness_config_print_resolved() {
 _harness_loop_present_keys() {
   jq -r '
     [
-      (["loop.goal","loop.maxTurns","loop.maxSeconds","loop.maxCostUsd","loop.gate","loop.stopOnIdenticalFailures","loop.confirmOnTreeDrift"][]) as $k
+      (["loop.goal","loop.maxTurns","loop.maxSeconds","loop.maxCostUsd","loop.gate","loop.stopOnIdenticalFailures","loop.confirmOnTreeDrift","loop.enumerateFirst"][]) as $k
       | select(has($k))
       | $k
     ] | join(", ")

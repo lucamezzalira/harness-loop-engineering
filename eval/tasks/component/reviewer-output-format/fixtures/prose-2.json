@@ -1,0 +1,10 @@
+{
+  "text": "Findings:\n1. race-on-subscribe: subscribe checks then inserts with a yield; concurrent requests can both win.\n2. welcome-not-idempotent: mailer ignores the idempotency key and can send duplicate welcomes.\n3. deep-import-boundary: email handler imports SubscriberStore from subscription-service.\n4. email-in-info-log: subscriber email is written to an info log line after confirm.\n5. failed-send-acked: on SMTP failure the handler logs and does not rethrow, so the event is lost.",
+  "keys": [
+    "race-on-subscribe",
+    "welcome-not-idempotent",
+    "deep-import-boundary",
+    "email-in-info-log",
+    "failed-send-acked"
+  ]
+}

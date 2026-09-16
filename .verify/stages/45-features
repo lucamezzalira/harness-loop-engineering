@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+# 45-features: falsify passes claims in features.json.
+# Absent file: no-op (exit 0). Model may assert passes; this stage checks.
+set -euo pipefail
+command -v jq >/dev/null || exit 2
+command -v node >/dev/null || exit 2
+command -v git >/dev/null || exit 2
+
+root="${VERIFY_ROOT:-$PWD}"
+root="$(cd "$root" && pwd)"
+file="$root/features.json"
+
+if [[ ! -f "$file" ]]; then
+  exit 0
+fi
+
+if ! jq -e '.features | type == "array"' "$file" >/dev/null 2>&1; then
+  echo "features.json: missing features array" >&2
+  exit 1
+fi
+
+# HEAD version: empty object when the file is untracked or new.
+head_json="{}"
+if git -C "$root" cat-file -e "HEAD:features.json" 2>/dev/null; then
+  head_json="$(git -C "$root" show HEAD:features.json)"
+elif git -C "$root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  # Not in HEAD yet: no immutability or deletion checks against prior ids.
+  head_json='{"goal":null,"features":[]}'
+fi
+
+fail=0
+
+# 1) Feature ids must be a superset of HEAD ids (may add, never remove).
+python3 - "$file" <(printf '%s' "$head_json") <<'PY' || fail=1
+import json, sys
+cur = json.load(open(sys.argv[1]))
+head = json.load(open(sys.argv[2]))
+cur_ids = {f.get("id") for f in cur.get("features") or [] if f.get("id")}
+head_ids = {f.get("id") for f in head.get("features") or [] if f.get("id")}
+missing = sorted(head_ids - cur_ids)
+if missing:
+    print(f"features.json: removed feature ids not allowed: {', '.join(missing)}", file=sys.stderr)
+    sys.exit(1)
+
+# Immutable fields for ids present in HEAD: everything except passes and testId.
+# Goal is also immutable once the file existed in HEAD.
+if head.get("features") is not None and head_ids:
+    if cur.get("goal") != head.get("goal"):
+        print("features.json: goal may not change once committed", file=sys.stderr)
+        sys.exit(1)
+    head_by_id = {f["id"]: f for f in head["features"] if "id" in f}
+    for f in cur.get("features") or []:
+        fid = f.get("id")
+        if fid not in head_by_id:
+            continue
+        prev = head_by_id[fid]
+        for key in prev:
+            if key in ("passes", "testId"):
+                continue
+            if f.get(key) != prev.get(key):
+                print(f"features.json: feature {fid} field '{key}' is immutable", file=sys.stderr)
+                sys.exit(1)
+sys.exit(0)
+PY
+
+# 2) passes:true requires non-empty testId, existing test, and a passing run.
+while IFS= read -r row; do
+  [[ -z "$row" ]] && continue
+  fid="$(jq -r '.id' <<<"$row")"
+  passes="$(jq -r '.passes' <<<"$row")"
+  test_id="$(jq -r '.testId // empty' <<<"$row")"
+  if [[ "$passes" != "true" ]]; then
+    continue
+  fi
+  if [[ -z "$test_id" ]]; then
+    echo "features.json: feature ${fid} has passes:true but empty testId" >&2
+    fail=1
+    continue
+  fi
+  # testId format: path::test name
+  test_path="${test_id%%::*}"
+  test_name="${test_id#*::}"
+  if [[ "$test_path" == "$test_id" || -z "$test_name" ]]; then
+    echo "features.json: feature ${fid} testId must be path::name" >&2
+    fail=1
+    continue
+  fi
+  if [[ ! -f "$root/$test_path" ]]; then
+    echo "features.json: feature ${fid} test file missing: ${test_path}" >&2
+    fail=1
+    continue
+  fi
+  set +e
+  (
+    cd "$root"
+    npx --no-install vitest run "$test_path" -t "$test_name" >/tmp/features-vitest.out 2>&1
+  )
+  vec=$?
+  set -e
+  if [[ $vec -ne 0 ]]; then
+    echo "features.json: feature ${fid} claims pass but test failed: ${test_id}" >&2
+    tail -n 40 /tmp/features-vitest.out >&2 || true
+    fail=1
+  fi
+done < <(jq -c '.features[]' "$file")
+
+exit "$fail"

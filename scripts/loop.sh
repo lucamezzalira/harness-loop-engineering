@@ -4,10 +4,8 @@
 # hooks use. Requires loop.goal and loop.maxTurns.
 #
 # A session that compacted before stopping may resume with a thinner memory of
-# its plan. The trace snapshot is what lets you see that happened.
-#
-# There is no task backlog. The agent owns what to do; the harness owns whether
-# it may continue and when it must stop.
+# its plan. PROGRESS.md and features.json are the portable answer for the next
+# agent. The harness observes completion; it does not invent a task backlog.
 
 set -euo pipefail
 
@@ -44,6 +42,9 @@ Config (loop.*)
                           concludes the agent is stuck.
   confirmOnTreeDrift      default true. Ask before resuming onto a tree that
                           changed since the loop stopped.
+  enumerateFirst          default true. First turn of a fresh run writes
+                          features.json from the goal without implementing.
+                          Skipped when the file already exists.
 
 --resume  continue the run in .harness/loop-state.json
 --status  print current run state and resolved config, then exit 0
@@ -52,6 +53,8 @@ EOF
 
 STATE_FILE="$HARNESS_ROOT/.harness/loop-state.json"
 STOP_FILE="$HARNESS_ROOT/.harness/STOP"
+PROGRESS_FILE="$HARNESS_ROOT/PROGRESS.md"
+FEATURES_FILE="$HARNESS_ROOT/features.json"
 
 harness_parse_flags --resume --status -- "$@"
 if [[ "${HARNESS_CLI_HELP}" -eq 1 ]]; then
@@ -82,6 +85,56 @@ write_state() {
   printf '%s\n' "$1" >"$STATE_FILE"
 }
 
+features_status_line() {
+  if [[ ! -f "$FEATURES_FILE" ]]; then
+    return 0
+  fi
+  python3 - "$FEATURES_FILE" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+features = data.get("features") or []
+total = len(features)
+passing = sum(1 for f in features if f.get("passes") is True)
+print(f"  features:       {passing}/{total} passing")
+PY
+}
+
+features_all_passing() {
+  if [[ ! -f "$FEATURES_FILE" ]]; then
+    return 0
+  fi
+  python3 - "$FEATURES_FILE" <<'PY'
+import json, sys
+features = json.load(open(sys.argv[1])).get("features") or []
+sys.exit(0 if features and all(f.get("passes") is True for f in features) else 1)
+PY
+}
+
+append_progress() {
+  local reason=$1
+  local turns elapsed
+  local state
+  state="$(read_state)"
+  turns="$(jq -r '.turns // 0' <<<"$state")"
+  elapsed="$(jq -r '.elapsedSeconds // 0' <<<"$state")"
+  mkdir -p "$(dirname "$PROGRESS_FILE")"
+  if [[ ! -f "$PROGRESS_FILE" ]]; then
+    printf '%s\n\n' '# Progress' >"$PROGRESS_FILE"
+  fi
+  {
+    echo
+    echo "## $(date -u +"%Y-%m-%dT%H:%M:%SZ") stop=${reason}"
+    echo
+    echo "Turns ${turns}. Elapsed ${elapsed}s. Goal: $(jq -r '.goal // empty' <<<"$state")."
+    if [[ -f "$FEATURES_FILE" ]]; then
+      features_status_line | sed 's/^  //'
+    else
+      echo "features.json absent."
+    fi
+    echo "Next session: read PROGRESS.md, features.json, and git log before editing."
+  } >>"$PROGRESS_FILE"
+}
+
 if [[ "$action" == "--status" ]]; then
   state="$(read_state)"
   if ! jq -e '.goal' <<<"$state" >/dev/null 2>&1; then
@@ -100,6 +153,7 @@ if [[ "$action" == "--status" ]]; then
       "  stoppedReason:  \(.stoppedReason // "")",
       "  resumable:      \(.resumable)"
     ' <<<"$state"
+    features_status_line || true
   fi
   echo
   harness_config_print_resolved
@@ -115,6 +169,7 @@ max_cost="$(harness_config_get loop.maxCostUsd)"
 gate="$(harness_config_get loop.gate)"
 stop_identical="$(harness_config_get loop.stopOnIdenticalFailures)"
 confirm_drift="$(harness_config_get loop.confirmOnTreeDrift)"
+enumerate_first="$(harness_config_get loop.enumerateFirst)"
 
 ORIGIN_EPOCH="$(date +%s)"
 
@@ -123,7 +178,6 @@ stop_loop() {
   local state elapsed
   elapsed=$(( $(date +%s) - ORIGIN_EPOCH ))
   state="$(read_state)"
-  # On resume, add prior elapsed stored before this process started.
   local base
   base="$(jq -r '.elapsedBase // 0' <<<"$state")"
   elapsed=$((elapsed + base))
@@ -134,6 +188,7 @@ stop_loop() {
     '.stoppedReason=$r | .treeHashAtStop=$h | .elapsedSeconds=$e | .resumable=true' \
     <<<"$state")"
   write_state "$state"
+  append_progress "$reason"
   echo "loop: stopped (${reason})" >&2
   exit 0
 }
@@ -141,9 +196,47 @@ stop_loop() {
 trap 'stop_loop "SIGINT"' INT
 
 invoke_agent_turn() {
+  local enumerate_only=${1:-0}
+  if [[ "$enumerate_only" == "1" ]]; then
+    export HARNESS_ENUMERATE_ONLY=1
+    echo "loop: enumerate-only turn (write features.json from the goal, do not implement)" >&2
+  else
+    unset HARNESS_ENUMERATE_ONLY || true
+  fi
+  seed_features_skeleton() {
+    local goal_text="$goal"
+    if [[ -f "$HARNESS_ROOT/$goal" ]]; then
+      goal_text="$(head -n 1 "$HARNESS_ROOT/$goal")"
+    fi
+    jq -nc --arg g "$goal_text" '{
+      goal:$g,
+      features:[
+        {
+          id:"F-001",
+          category:"functional",
+          description:("Complete: "+$g),
+          steps:["Enumerate remaining acceptance checks","Attach testId before marking passes"],
+          testId:"",
+          passes:false
+        }
+      ]
+    }' >"$FEATURES_FILE"
+    echo "loop: wrote features.json (enumerate skeleton)" >&2
+  }
+
   if [[ -n "${HARNESS_AGENT_CMD:-}" ]]; then
     eval "$HARNESS_AGENT_CMD"
-    return $?
+    local ec
+    ec=$?
+    # If the agent ignored enumerate-only, keep the loop invariant: file exists.
+    if [[ "$enumerate_only" == "1" && ! -f "$FEATURES_FILE" ]]; then
+      seed_features_skeleton
+    fi
+    return "$ec"
+  fi
+  if [[ "$enumerate_only" == "1" && ! -f "$FEATURES_FILE" ]]; then
+    seed_features_skeleton
+    return 0
   fi
   echo "loop: no HARNESS_AGENT_CMD; simulating turn" >&2
   return 0
@@ -195,7 +288,14 @@ if [[ "$action" == "--resume" ]]; then
       esac
     fi
   fi
-  # Preserve elapsed so far as base for this process.
+  echo "loop: resume orientation" >&2
+  if [[ -f "$PROGRESS_FILE" ]]; then
+    echo "loop: PROGRESS.md (tail)" >&2
+    tail -n 20 "$PROGRESS_FILE" >&2 || true
+  else
+    echo "loop: PROGRESS.md absent" >&2
+  fi
+  features_status_line >&2 || true
   write_state "$(jq -c '
     .stoppedReason=""
     | .resumable=false
@@ -242,7 +342,12 @@ while true; do
     esac
   fi
 
-  invoke_agent_turn || true
+  enumerate_only=0
+  if [[ "$enumerate_first" == "true" && ! -f "$FEATURES_FILE" && "$turns" -eq 0 ]]; then
+    enumerate_only=1
+  fi
+
+  invoke_agent_turn "$enumerate_only" || true
 
   set +e
   "$HARNESS_ROOT/scripts/verify.sh" turn >/tmp/loop-verify.out 2>&1
@@ -289,8 +394,15 @@ while true; do
     stop_loop "stopOnIdenticalFailures"
   fi
 
+  # Completion: turn green, agent done, and features absent or all passing.
+  # Reviewer emptiness is enforced by the stop hook on real agent sessions;
+  # HARNESS_LOOP_DONE is the agent's signal that it wants no further turn.
   if [[ $vec -eq 0 && "${HARNESS_LOOP_DONE:-}" == "1" ]]; then
-    stop_loop "complete"
+    if features_all_passing; then
+      stop_loop "complete"
+    else
+      echo "loop: turn green but features remain failing; continuing" >&2
+    fi
   fi
 
   if [[ "$gate" == "on-commit" && -t 0 ]]; then
@@ -301,6 +413,5 @@ while true; do
     esac
   fi
 
-  # Re-check budgets after the turn so maxTurns stops without starting another.
   check_budgets
 done

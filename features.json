@@ -1,0 +1,16 @@
+{
+  "goal": "Idempotent welcome email",
+  "features": [
+    {
+      "id": "F-012",
+      "category": "functional",
+      "description": "Retrying a send does not deliver a second welcome email",
+      "steps": [
+        "Emit SubscriberConfirmed twice with the same subscriber id",
+        "Assert exactly one message reaches the transport"
+      ],
+      "testId": "examples/10-newsletter/newsletter.test.ts::sends a welcome email once per event id",
+      "passes": false
+    }
+  ]
+}

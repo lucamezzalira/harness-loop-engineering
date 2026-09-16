@@ -43,3 +43,19 @@ eval/run.sh
 
 Moving `reviewer` from `deep` to `fast` in `eval/models.yaml` and re-running
 produces a visibly different recall against the newsletter defects.
+
+## Output format: JSON contract vs prose
+
+Task: `eval/tasks/component/reviewer-output-format/`. Same defect set, same
+model tier, three repeats per arm.
+
+| Arm                  | Mean recall (replay fixtures) | Matched            |
+| -------------------- | ----------------------------- | ------------------ |
+| JSON contract        | 0.67                          | D1, D2, D3, D5     |
+| Prose + hand mapping | 0.83                          | D1, D2, D3, D4, D5 |
+
+In this seeded component run the JSON contract costs recall on the privacy
+finding (D4). The contract stays because scoring and the stop hook need a
+machine-readable array; the cost is stated rather than assumed to be free.
+Re-run with `HARNESS_EVAL_LIVE=1` when you change the reviewer prompt, and
+replace the fixtures if live numbers differ.

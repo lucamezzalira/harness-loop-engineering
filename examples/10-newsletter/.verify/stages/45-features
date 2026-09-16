@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Delegate to the harness root stage so newsletter VERIFY_STAGES stays complete.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec "$here/../../../.verify/stages/45-features"

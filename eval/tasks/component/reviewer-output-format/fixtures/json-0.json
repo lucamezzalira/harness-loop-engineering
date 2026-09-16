@@ -1,0 +1,34 @@
+[
+  {
+    "file": "examples/10-newsletter/services/subscription-service/src/subscribe.ts",
+    "startLine": 31,
+    "endLine": 38,
+    "category": "concurrency",
+    "severity": "high",
+    "rationale": "check then insert race"
+  },
+  {
+    "file": "examples/10-newsletter/services/email-service/src/mailer.ts",
+    "startLine": 26,
+    "endLine": 33,
+    "category": "idempotency",
+    "severity": "high",
+    "rationale": "no idempotency key"
+  },
+  {
+    "file": "examples/10-newsletter/services/email-service/src/handler.ts",
+    "startLine": 5,
+    "endLine": 12,
+    "category": "boundary",
+    "severity": "high",
+    "rationale": "imports subscription internals"
+  },
+  {
+    "file": "examples/10-newsletter/services/email-service/src/handler.ts",
+    "startLine": 23,
+    "endLine": 30,
+    "category": "error-handling",
+    "severity": "high",
+    "rationale": "failed send acks and drops"
+  }
+]

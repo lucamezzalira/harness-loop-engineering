@@ -66,3 +66,9 @@ loop:
   # Ask before resuming onto a tree that changed since the loop stopped. Silent
   # resumption onto a moved tree is the worst failure this system can produce.
   confirmOnTreeDrift: true
+
+  # First turn of a fresh run writes features.json from the goal without
+  # implementing. Skipped when the file already exists. Across sessions this is
+  # the definition of done; within one attended session the agent already has
+  # its own list.
+  enumerateFirst: true

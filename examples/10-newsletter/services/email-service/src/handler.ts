@@ -3,7 +3,6 @@ import {
   type EventBus,
   type NewsletterEvent,
 } from '../../../packages/contracts/src/index.js'
-import { SubscriberStore } from '../../subscription-service/src/store.js'
 import type { IdempotentMailer } from './mailer.js'
 
 export type Logger = {
@@ -19,13 +18,8 @@ export function attachWelcomeHandler(bus: EventBus, mailer: IdempotentMailer, lo
   bus.subscribe('SubscriberConfirmed', async (event: NewsletterEvent) => {
     const confirmed = assertSubscriberConfirmed(event)
     try {
-      // D3: deep import of subscription-service internals instead of trusting the event.
-      void SubscriberStore
       await mailer.sendWelcome(confirmed.id, confirmed.email)
-      log.info('welcome email sent', {
-        eventId: confirmed.id,
-        store: SubscriberStore.name,
-      })
+      log.info('welcome email sent', { eventId: confirmed.id })
     } catch (err) {
       log.error('welcome email failed', {
         eventId: confirmed.id,

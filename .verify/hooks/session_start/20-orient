@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# session_start: print orientation for a fresh context window.
+# Prints only. Instructions to read this before starting work live in a skill.
+set -euo pipefail
+HARNESS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+root="${VERIFY_ROOT:-$HARNESS_ROOT}"
+root="$(cd "$root" && pwd)"
+
+echo "orient: working directory" >&2
+echo "  $root" >&2
+
+echo "orient: recent commits" >&2
+if git -C "$root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  git -C "$root" --no-pager log -5 --oneline >&2 || echo "  (git log unavailable)" >&2
+else
+  echo "  (not a git work tree)" >&2
+fi
+
+echo "orient: PROGRESS.md (tail)" >&2
+if [[ -f "$root/PROGRESS.md" ]]; then
+  tail -n 20 "$root/PROGRESS.md" >&2
+else
+  echo "  (absent)" >&2
+fi
+
+echo "orient: features" >&2
+if [[ -f "$root/features.json" ]]; then
+  python3 - "$root/features.json" <<'PY' >&2
+import json, sys
+data = json.load(open(sys.argv[1]))
+features = data.get("features") or []
+total = len(features)
+passing = sum(1 for f in features if f.get("passes") is True)
+print(f"  {passing}/{total} passing")
+PY
+else
+  echo "  (features.json absent)" >&2
+fi
+
+echo "orient: init.sh" >&2
+if [[ -x "$root/scripts/init.sh" ]]; then
+  echo "  present ($root/scripts/init.sh)" >&2
+elif [[ -f "$root/scripts/init.sh" ]]; then
+  echo "  present but not executable ($root/scripts/init.sh)" >&2
+else
+  echo "  absent" >&2
+fi
+
+exit 0

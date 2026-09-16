@@ -1,0 +1,11 @@
+{
+  "notes": "Hand mapping from prose fixture finding keys to defect ids. Committed so scoring stays reproducible without a judge model.",
+  "findings": {
+    "race-on-subscribe": "D1",
+    "welcome-not-idempotent": "D2",
+    "deep-import-boundary": "D3",
+    "email-in-info-log": "D4",
+    "failed-send-acked": "D5",
+    "weak-email-validation": "D6"
+  }
+}

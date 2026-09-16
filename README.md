@@ -1,10 +1,10 @@
 # Harness loop engineering
 
-Coding agents write fast and forget what "done" means. This repo is a harness you
-copy into a project so the agent works inside fixed roles, verification stages,
-and hooks that run the same way under Claude Code, Cursor, or anything else.
-Pass and fail stay exit codes, hashes, and empty versus non-empty results. A
-model can advise. It never decides the gate.
+A harness does not make the model smarter. Benchmarks with a perfect hidden
+oracle already grade that. What a harness manufactures is a definition of done
+where the repository does not have one, and output a team can accept without a
+human reading every line. Pass and fail stay exit codes, hashes, and empty
+versus non-empty results. A model can advise. It never decides the gate.
 
 The root is the template: short context in `AGENTS.md`, role prompts in
 `agents/`, procedures in `skills/`, model bindings in `eval/models.yaml`, and
@@ -13,6 +13,26 @@ tool-specific files under `.claude/` and `.cursor/` that you never edit by
 hand. `scripts/verify.sh` and `scripts/hook.sh` enforce the loop. `examples/`
 shows the pieces on a small two-service app. Drop the template into your own
 repo, keep the examples or delete them, and tune the stages to your stack.
+
+## Where a minimal harness wins
+
+For an isolated task with a perfect oracle, added structure mostly gets in the
+way. Scenario `00-minimal` is the control: bash only, no roles, no hooks, same
+defect seed as the full newsletter harness. The repo ships its own counterexample
+on purpose. See [REFERENCES.md](REFERENCES.md) for the benchmark numbers behind
+that claim.
+
+## Example ladder
+
+| Scenario                | What it teaches                                       |
+| ----------------------- | ----------------------------------------------------- |
+| `00-minimal`            | Control. Unstructured baseline against the same seed. |
+| `01-baseline`           | Underspecified prompt with harness wiring disabled.   |
+| `02-context-only`       | Context files without enforcement.                    |
+| `03-verify-in-the-loop` | Verification stages in the turn.                      |
+| `04-enforcement`        | Hooks that deny stop and commit on red.               |
+| `05-reading-the-trace`  | Using traces when a session compacted.                |
+| `10-newsletter`         | Two-service app with planted defects D1 to D6.        |
 
 ## Oracle strength
 
@@ -49,54 +69,32 @@ flowchart LR
   F --> T
 ```
 
-Canonical sources feed `adapters/render.sh`. Generated adapters contain no
-logic. Hand-editing `.claude/` or `.cursor/` is the most common newcomer
-mistake and the next `render.sh` run will overwrite you.
-
-| Path                    | Purpose                          | Edit this?      |
-| ----------------------- | -------------------------------- | --------------- |
-| `AGENTS.md`             | Short project context for agents | Yes             |
-| `agents/`               | Canonical role prompts           | Yes             |
-| `agents/*.rationale.md` | Why the tier was chosen          | Yes (humans)    |
-| `skills/`               | On-demand procedures             | Yes             |
-| `eval/models.yaml`      | Only place a model is named      | Yes             |
-| `harness.config.yaml`   | All harness behaviour            | Yes (optional)  |
-| `.verify/stages/`       | One tool call per stage          | Yes             |
-| `scripts/`              | verify, hook, loop, scenario     | Yes             |
-| `.claude/`, `.cursor/`  | Generated adapters               | No              |
-| `.harness/`             | Runtime state                    | No (gitignored) |
-
-## The developer loop
+## A turn that fails, then recovers
 
 ```mermaid
 sequenceDiagram
-  participant Dev as Developer
   participant Agent
   participant Hook as hook.sh
   participant Verify as verify.sh
-  participant Review as Reviewer
+  participant Review as reviewer
   participant Git
-  Dev->>Agent: state a task
-  Agent->>Agent: delegate / edit
-  Agent->>Hook: post_tool edit
-  Hook->>Verify: edit tier
   Agent->>Hook: stop
   Hook->>Verify: turn tier
-  alt turn red
-    Verify-->>Agent: failing stage output
-    Agent->>Agent: correct
-    Agent->>Hook: stop again
-    Hook->>Verify: turn tier
-  end
-  Verify-->>Hook: turn green
-  Hook->>Review: accumulated diff
-  alt findings non-empty
-    Review-->>Agent: JSON findings
-    Agent->>Agent: fix
-    Agent->>Hook: stop
-    Hook->>Review: re-review
-  end
-  Review-->>Hook: empty array
+  Verify-->>Hook: fail (exit 1)
+  Hook-->>Agent: deny stop, failing stage
+  Agent->>Agent: fix code
+  Agent->>Hook: stop
+  Hook->>Verify: turn tier
+  Verify-->>Hook: pass
+  Hook->>Review: review diff
+  Review-->>Hook: findings
+  Hook-->>Agent: deny stop, findings
+  Agent->>Agent: address findings
+  Agent->>Hook: stop
+  Hook->>Verify: turn tier
+  Verify-->>Hook: pass
+  Hook->>Review: review diff
+  Review-->>Hook: empty
   Hook-->>Agent: allow stop
   Agent->>Git: git commit
   Git->>Hook: pre_tool
@@ -112,6 +110,11 @@ The correction cycles are the point. A happy-path-only diagram teaches nothing.
 Edit-tier feedback arrives while the change is still small. Turn-tier feedback
 catches what the file-local checks cannot. The commit gate compares a content
 hash, not mtimes, so checkout and rebase do not produce false denials.
+
+Across sessions, `features.json` is the durable definition of done,
+`PROGRESS.md` orients the next context window, and `scripts/init.sh` boots
+whatever the project needs without rediscovering it. Sources:
+[REFERENCES.md](REFERENCES.md).
 
 ## Configuration
 
@@ -143,17 +146,23 @@ stage. After, it gets everything, which sounds better and is not: agents given
 nine failures pick the wrong one to start on. False in CI where a human reads
 the whole picture, true where an agent is reading.
 
+**`loop.enumerateFirst` true to false.** Before, a fresh `loop.sh` run spends
+its first turn writing `features.json` from the goal and does not implement.
+After, the agent may start coding immediately and leave the next session without
+an explicit outline of done. Keep true for unattended multi-session work.
+
 ## Claude Code quickstart
 
 ```bash
 scripts/setup.sh
 adapters/render.sh claude
-scripts/scenario.sh start 01-baseline
-cd ../.scenarios/01-baseline
-claude
+scripts/scenario.sh start 00-minimal
+cd ../.scenarios/00-minimal
 ```
 
-Then `/agents` and `/hooks` to confirm wiring. Omit the target (or pass both)
+Paste `examples/00-minimal/prompt` as the only instruction for the control run.
+For the structured path, start `01-baseline` or `04-enforcement` instead, then
+`/agents` and `/hooks` to confirm wiring. Omit the render target (or pass both)
 to render every adapter; CI checks both.
 
 ## Cursor quickstart
@@ -161,13 +170,14 @@ to render every adapter; CI checks both.
 ```bash
 scripts/setup.sh
 adapters/render.sh cursor
-scripts/scenario.sh start 01-baseline
+scripts/scenario.sh start 00-minimal
 ```
 
-Open the worktree as the workspace folder. Roles appear from `.cursor/agents/`.
-Hooks reload automatically; restart if one seems inert. Cursor cloud agents pick
-up `.cursor/hooks.json` from the project root and run it during their work,
-which is when people realise enforcement follows the work off their machine.
+Open the worktree as the workspace folder. For structured runs, roles appear
+from `.cursor/agents/`. Hooks reload automatically; restart if one seems inert.
+Cursor cloud agents pick up `.cursor/hooks.json` from the project root and run
+it during their work, which is when people realise enforcement follows the work
+off their machine.
 
 ## Codex
 
@@ -240,3 +250,5 @@ and extraction stays mechanical.
 
 `.claude/` and `.cursor/` are generated. Re-run `adapters/render.sh` after
 editing `agents/` or `eval/models.yaml`.
+
+Claims and sources: [REFERENCES.md](REFERENCES.md).
