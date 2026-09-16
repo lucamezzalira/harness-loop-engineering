@@ -1,20 +1,27 @@
 # Harness loop engineering
 
-A reference implementation of an agentic coding harness, built as training
-material for a workshop and a video course. The repo root is a template a team
-can copy into their own codebase. `examples/` holds runnable lessons. The claim
-is that a harness is not an IDE feature: the same roles, verification, and
-enforcement should work under Claude Code, Cursor, or anything else, through a
-thin generated adapter.
+Coding agents write fast and forget what "done" means. This repo is a harness you
+copy into a project so the agent works inside fixed roles, verification stages,
+and hooks that run the same way under Claude Code, Cursor, or anything else.
+Pass and fail stay exit codes, hashes, and empty versus non-empty results. A
+model can advise. It never decides the gate.
+
+The root is the template: short context in `AGENTS.md`, role prompts in
+`agents/`, procedures in `skills/`, model bindings in `eval/models.yaml`, and
+behaviour in `harness.config.yaml`. `adapters/render.sh` turns those into
+tool-specific files under `.claude/` and `.cursor/` that you never edit by
+hand. `scripts/verify.sh` and `scripts/hook.sh` enforce the loop. `examples/`
+shows the pieces on a small two-service app. Drop the template into your own
+repo, keep the examples or delete them, and tune the stages to your stack.
 
 ## Oracle strength
 
-The weaker the deterministic oracle for a role, the stronger the model that role
-needs. The reviewer's output is prose read by a human, and nothing in
-`verify.sh` catches a defect it failed to mention, so it gets the deep tier.
-QA's output is a reproduction that either fails on the broken commit and passes
-on the fixed one or does not, so the fast tier is safe because its mistakes are
-caught for free.
+The weaker the deterministic check for a role, the stronger the model that role
+needs. The reviewer's output is prose a human or the stop hook reads, and
+nothing in `verify.sh` catches a defect it failed to mention, so it gets the
+deep tier. QA's output is a reproduction that either fails on the broken commit
+and passes on the fixed one or does not, so the fast tier is safe because its
+mistakes are caught for free.
 
 ## Anatomy
 
@@ -224,9 +231,10 @@ flowchart LR
 
 ## Adoption
 
-Once a team understands the pieces, the versioned package route is what they do
-next: extract `scripts/`, `.verify/`, `agents/`, and the config loader into a
-shared module. This repo stays a template you copy, so the seams stay visible
+Copy the template into a codebase, run `scripts/setup.sh`, and point the stages
+at your real lint, typecheck, and tests. When the layout is stable across
+several repos, extract `scripts/`, `.verify/`, `agents/`, and the config loader
+into a shared package. This repo stays a template so those seams stay visible
 and extraction stays mechanical.
 
 `.claude/` and `.cursor/` are generated. Re-run `adapters/render.sh` after
