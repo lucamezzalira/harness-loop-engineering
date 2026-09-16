@@ -15,7 +15,9 @@ Usage: scripts/setup.sh
        scripts/setup.sh -h|--help
        scripts/setup.sh -v|--version
 
-Runs npm install and adapters/render.sh. Requires Node 22+, jq, yq, git.
+Runs npm install and adapters/render.sh (both tool adapters). Requires
+Node 22+, jq, yq, git. To render a single adapter afterward:
+adapters/render.sh cursor
 EOF
 }
 

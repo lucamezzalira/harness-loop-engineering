@@ -2,4 +2,5 @@
 
 @AGENTS.md
 
-Claude-only: `/agents` and `/hooks` confirm generated wiring. Re-run `adapters/render.sh` after editing `agents/` or `eval/models.yaml`.
+Claude-only: `/agents` and `/hooks` confirm generated wiring. Re-run
+`adapters/render.sh claude` after editing `agents/` or `eval/models.yaml`.

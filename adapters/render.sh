@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # adapters/render.sh
-# Generate .claude/ and .cursor/ from agents/*.md and eval/models.yaml.
+# Generate tool adapters from agents/*.md and eval/models.yaml.
 # Adapters contain no logic. Running twice produces no diff.
 # --check exits 1 when generated files differ from what would be written.
+#
+# By default both Claude and Cursor adapters are rendered. Pass one or more
+# targets to render only those: adapters/render.sh cursor
 
 set -euo pipefail
 
@@ -12,15 +15,18 @@ source "$HARNESS_ROOT/scripts/lib/version.sh"
 
 usage() {
   cat <<'EOF'
-Usage: adapters/render.sh
-       adapters/render.sh --check
+Usage: adapters/render.sh [claude|cursor]...
+       adapters/render.sh --check [claude|cursor]...
        adapters/render.sh -h|--help
        adapters/render.sh -v|--version
 
 Renders canonical roles into tool-specific adapters. The only place a model
 is chosen is eval/models.yaml. This script injects the resolved id.
 
---check  exit 1 when generated files would change (CI)
+With no targets, both claude and cursor are rendered. Pass one or more
+targets when you only use that tool, so the other adapter tree is left alone.
+
+--check  exit 1 when generated files for the selected targets would change (CI)
 EOF
 }
 
@@ -35,6 +41,25 @@ if [[ "${HARNESS_CLI_VERSION}" -eq 1 ]]; then
 fi
 if [[ ${#HARNESS_CLI_ACTIONS[@]} -gt 0 ]]; then
   CHECK=1
+fi
+
+RENDER_CLAUDE=0
+RENDER_CURSOR=0
+if [[ ${#HARNESS_CLI_POSITIONAL[@]} -eq 0 ]]; then
+  RENDER_CLAUDE=1
+  RENDER_CURSOR=1
+else
+  for target in "${HARNESS_CLI_POSITIONAL[@]}"; do
+    case "$target" in
+      claude) RENDER_CLAUDE=1 ;;
+      cursor) RENDER_CURSOR=1 ;;
+      *)
+        echo "unrecognised target: ${target}" >&2
+        echo "valid: claude cursor" >&2
+        exit 2
+        ;;
+    esac
+  done
 fi
 
 harness_need_cmd jq
@@ -117,46 +142,49 @@ EOF
   _harness_write "$dest" "${body}"$'\n'
 }
 
-hook_cmd_claude_session='env HARNESS_TOOL=claude HARNESS_EVENT=session_start ./scripts/hook.sh'
-hook_cmd_claude_pre='env HARNESS_TOOL=claude HARNESS_EVENT=pre_tool ./scripts/hook.sh'
-hook_cmd_claude_post='env HARNESS_TOOL=claude HARNESS_EVENT=post_tool ./scripts/hook.sh'
-hook_cmd_claude_stop='env HARNESS_TOOL=claude HARNESS_EVENT=stop ./scripts/hook.sh'
-hook_cmd_cursor_session='env HARNESS_TOOL=cursor HARNESS_EVENT=session_start ./scripts/hook.sh'
-hook_cmd_cursor_pre='env HARNESS_TOOL=cursor HARNESS_EVENT=pre_tool ./scripts/hook.sh'
-hook_cmd_cursor_post='env HARNESS_TOOL=cursor HARNESS_EVENT=post_tool ./scripts/hook.sh'
-hook_cmd_cursor_stop='env HARNESS_TOOL=cursor HARNESS_EVENT=stop ./scripts/hook.sh'
+render_claude_hooks() {
+  local settings
+  settings="$(jq -n \
+    --arg s 'env HARNESS_TOOL=claude HARNESS_EVENT=session_start ./scripts/hook.sh' \
+    --arg pre 'env HARNESS_TOOL=claude HARNESS_EVENT=pre_tool ./scripts/hook.sh' \
+    --arg post 'env HARNESS_TOOL=claude HARNESS_EVENT=post_tool ./scripts/hook.sh' \
+    --arg stop 'env HARNESS_TOOL=claude HARNESS_EVENT=stop ./scripts/hook.sh' \
+    '{
+    hooks: {
+      SessionStart: [ { hooks: [ { type: "command", command: $s } ] } ],
+      PreToolUse:   [ { hooks: [ { type: "command", command: $pre } ] } ],
+      PostToolUse:  [ { hooks: [ { type: "command", command: $post } ] } ],
+      Stop:         [ { hooks: [ { type: "command", command: $stop } ] } ]
+    }
+  }')"
+  _harness_write_json "$HARNESS_ROOT/.claude/settings.json" "$settings"
+}
 
-claude_settings="$(jq -n \
-  --arg s "$hook_cmd_claude_session" \
-  --arg pre "$hook_cmd_claude_pre" \
-  --arg post "$hook_cmd_claude_post" \
-  --arg stop "$hook_cmd_claude_stop" \
-  '{
-  hooks: {
-    SessionStart: [ { hooks: [ { type: "command", command: $s } ] } ],
-    PreToolUse:   [ { hooks: [ { type: "command", command: $pre } ] } ],
-    PostToolUse:  [ { hooks: [ { type: "command", command: $post } ] } ],
-    Stop:         [ { hooks: [ { type: "command", command: $stop } ] } ]
-  }
-}')"
+render_cursor_hooks() {
+  local hooks
+  hooks="$(jq -n \
+    --arg s 'env HARNESS_TOOL=cursor HARNESS_EVENT=session_start ./scripts/hook.sh' \
+    --arg pre 'env HARNESS_TOOL=cursor HARNESS_EVENT=pre_tool ./scripts/hook.sh' \
+    --arg post 'env HARNESS_TOOL=cursor HARNESS_EVENT=post_tool ./scripts/hook.sh' \
+    --arg stop 'env HARNESS_TOOL=cursor HARNESS_EVENT=stop ./scripts/hook.sh' \
+    '{
+    version: 1,
+    hooks: {
+      sessionStart: [ { command: $s } ],
+      preToolUse:   [ { command: $pre, failClosed: true } ],
+      postToolUse:  [ { command: $post } ],
+      stop:         [ { command: $stop, failClosed: true } ]
+    }
+  }')"
+  _harness_write_cursor_hooks "$HARNESS_ROOT/.cursor/hooks.json" "$hooks"
+}
 
-cursor_hooks="$(jq -n \
-  --arg s "$hook_cmd_cursor_session" \
-  --arg pre "$hook_cmd_cursor_pre" \
-  --arg post "$hook_cmd_cursor_post" \
-  --arg stop "$hook_cmd_cursor_stop" \
-  '{
-  version: 1,
-  hooks: {
-    sessionStart: [ { command: $s } ],
-    preToolUse:   [ { command: $pre, failClosed: true } ],
-    postToolUse:  [ { command: $post } ],
-    stop:         [ { command: $stop, failClosed: true } ]
-  }
-}')"
-
-_harness_write_json "$HARNESS_ROOT/.claude/settings.json" "$claude_settings"
-_harness_write_cursor_hooks "$HARNESS_ROOT/.cursor/hooks.json" "$cursor_hooks"
+if [[ "$RENDER_CLAUDE" -eq 1 ]]; then
+  render_claude_hooks
+fi
+if [[ "$RENDER_CURSOR" -eq 1 ]]; then
+  render_cursor_hooks
+fi
 
 shopt -s nullglob
 for src in "$AGENTS_DIR"/*.md; do
@@ -182,22 +210,33 @@ for src in "$AGENTS_DIR"/*.md; do
     *) readonly="true" ;;
   esac
 
-  claude_out="$(_harness_render_tpl "$TPL_DIR/claude-agent.md.tpl" "$display_name" "$description" "$model" "$tools" "$body" "$name" "$readonly")"
-  cursor_out="$(_harness_render_tpl "$TPL_DIR/cursor-agent.md.tpl" "$display_name" "$description" "$model" "$tools" "$body" "$name" "$readonly")"
-  _harness_write "$HARNESS_ROOT/.claude/agents/${name}.md" "$claude_out"
-  _harness_write "$HARNESS_ROOT/.cursor/agents/${name}.md" "$cursor_out"
+  if [[ "$RENDER_CLAUDE" -eq 1 ]]; then
+    claude_out="$(_harness_render_tpl "$TPL_DIR/claude-agent.md.tpl" "$display_name" "$description" "$model" "$tools" "$body" "$name" "$readonly")"
+    _harness_write "$HARNESS_ROOT/.claude/agents/${name}.md" "$claude_out"
+  fi
+  if [[ "$RENDER_CURSOR" -eq 1 ]]; then
+    cursor_out="$(_harness_render_tpl "$TPL_DIR/cursor-agent.md.tpl" "$display_name" "$description" "$model" "$tools" "$body" "$name" "$readonly")"
+    _harness_write "$HARNESS_ROOT/.cursor/agents/${name}.md" "$cursor_out"
+  fi
 done
 
 # Skills have one source. The Claude adapter is a symlink, not a copy.
-if [[ "$CHECK" -eq 1 ]]; then
-  if [[ ! -L "$HARNESS_ROOT/.claude/skills" ]] || [[ "$(readlink "$HARNESS_ROOT/.claude/skills")" != "../skills" ]]; then
-    echo "stale: .claude/skills (expected symlink to ../skills)" >&2
-    STALE=1
+if [[ "$RENDER_CLAUDE" -eq 1 ]]; then
+  if [[ "$CHECK" -eq 1 ]]; then
+    if [[ ! -L "$HARNESS_ROOT/.claude/skills" ]] || [[ "$(readlink "$HARNESS_ROOT/.claude/skills")" != "../skills" ]]; then
+      echo "stale: .claude/skills (expected symlink to ../skills)" >&2
+      STALE=1
+    fi
+  else
+    rm -f "$HARNESS_ROOT/.claude/.gitkeep"
+    mkdir -p "$HARNESS_ROOT/.claude"
+    ln -sfn ../skills "$HARNESS_ROOT/.claude/skills"
   fi
-else
-  rm -f "$HARNESS_ROOT/.claude/.gitkeep" "$HARNESS_ROOT/.cursor/.gitkeep"
-  mkdir -p "$HARNESS_ROOT/.claude" "$HARNESS_ROOT/.cursor/agents"
-  ln -sfn ../skills "$HARNESS_ROOT/.claude/skills"
+fi
+
+if [[ "$RENDER_CURSOR" -eq 1 && "$CHECK" -eq 0 ]]; then
+  rm -f "$HARNESS_ROOT/.cursor/.gitkeep"
+  mkdir -p "$HARNESS_ROOT/.cursor/agents"
 fi
 
 if [[ "$CHECK" -eq 1 && "$STALE" -eq 1 ]]; then

@@ -147,19 +147,20 @@ the whole picture, true where an agent is reading.
 
 ```bash
 scripts/setup.sh
-adapters/render.sh
+adapters/render.sh claude
 scripts/scenario.sh start 01-baseline
 cd ../.scenarios/01-baseline
 claude
 ```
 
-Then `/agents` and `/hooks` to confirm wiring.
+Then `/agents` and `/hooks` to confirm wiring. Omit the target (or pass both)
+to render every adapter; CI checks both.
 
 ## Cursor quickstart
 
 ```bash
 scripts/setup.sh
-adapters/render.sh
+adapters/render.sh cursor
 scripts/scenario.sh start 01-baseline
 ```
 

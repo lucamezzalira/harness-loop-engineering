@@ -1,56 +1,94 @@
 #!/usr/bin/env bash
 # 25-docs: validate every Mermaid block in markdown parses.
+# Uses mermaid.parse under jsdom (no Chromium). mmdc renders through Puppeteer
+# and fails on CI runners that disable the browser sandbox.
 set -euo pipefail
-command -v npx >/dev/null || exit 2
+command -v node >/dev/null || exit 2
 command -v python3 >/dev/null || exit 2
+
 root="${VERIFY_ROOT:-$PWD}"
-cd "$root"
+root="$(cd "$root" && pwd)"
+
+# Resolve harness root from this stage file so mermaid/jsdom load even when
+# VERIFY_ROOT is a worktree or temp dir without its own node_modules.
+stage_real="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$0")"
+harness_root="$(cd "$(dirname "$stage_real")/../.." && pwd)"
+for pkg in mermaid jsdom; do
+  if [[ ! -d "$harness_root/node_modules/$pkg" ]]; then
+    echo "${pkg} package not installed under ${harness_root}/node_modules (run npm install)" >&2
+    exit 2
+  fi
+done
 
 md_list=$(mktemp)
 trap 'rm -f "$md_list"' EXIT
 
-if [[ -n "${VERIFY_CHANGED_FILES:-}" ]]; then
-  printf '%s\n' "$VERIFY_CHANGED_FILES" | grep -E '\.md$' >"$md_list" || true
-else
-  find . -name '*.md' \
-    -not -path './node_modules/*' \
-    -not -path './.harness/*' \
-    -not -path './examples/*' \
-    -not -path './.git/*' >"$md_list" 2>/dev/null || true
-fi
+(
+  cd "$root"
+  if [[ -n "${VERIFY_CHANGED_FILES:-}" ]]; then
+    printf '%s\n' "$VERIFY_CHANGED_FILES" | grep -E '\.md$' || true
+  else
+    find . -name '*.md' \
+      -not -path './node_modules/*' \
+      -not -path './.harness/*' \
+      -not -path './examples/*' \
+      -not -path './.git/*' 2>/dev/null || true
+  fi
+) >"$md_list"
 
 if [[ ! -s "$md_list" ]]; then
   exit 0
 fi
 
-tmpdir=$(mktemp -d)
-trap 'rm -rf "$tmpdir"; rm -f "$md_list"' EXIT
-fail=0
-idx=0
-
+abs_list=$(mktemp)
+trap 'rm -f "$md_list" "$abs_list"' EXIT
 while IFS= read -r md; do
-  [[ -f "$md" ]] || continue
-  python3 - "$md" "$tmpdir" <<'PY' || fail=1
-import re, sys, subprocess, pathlib
-md = pathlib.Path(sys.argv[1])
-tmpdir = pathlib.Path(sys.argv[2])
-text = md.read_text(encoding="utf-8")
-blocks = re.findall(r"```mermaid\n(.*?)```", text, re.S)
-fail = 0
-for i, block in enumerate(blocks, 1):
-    infile = tmpdir / f"{md.name}-{i}.mmd"
-    outfile = tmpdir / f"{md.name}-{i}.svg"
-    infile.write_text(block, encoding="utf-8")
-    proc = subprocess.run(
-        ["npx", "--no-install", "mmdc", "-i", str(infile), "-o", str(outfile), "-q"],
-        capture_output=True, text=True,
-    )
-    if proc.returncode != 0:
-        print(f"Mermaid parse failed in {md} (block {i}):")
-        print(proc.stderr or proc.stdout)
-        fail = 1
-sys.exit(fail)
-PY
-done <"$md_list"
+  [[ -z "$md" ]] && continue
+  if [[ "$md" = /* ]]; then
+    printf '%s\n' "$md"
+  else
+    printf '%s\n' "$root/$md"
+  fi
+done <"$md_list" >"$abs_list"
 
-exit "$fail"
+# One external tool: node. cwd is the harness root so imports resolve.
+(
+  cd "$harness_root"
+  node --input-type=module - "$abs_list" <<'JS'
+import fs from 'node:fs'
+import { JSDOM } from 'jsdom'
+
+const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>')
+globalThis.window = dom.window
+globalThis.document = dom.window.document
+globalThis.DOMParser = dom.window.DOMParser
+globalThis.HTMLElement = dom.window.HTMLElement
+globalThis.SVGElement = dom.window.SVGElement
+globalThis.Element = dom.window.Element
+globalThis.Node = dom.window.Node
+
+const mermaid = (await import('mermaid')).default
+mermaid.initialize({ startOnLoad: false, securityLevel: 'loose' })
+
+const files = fs.readFileSync(process.argv[2], 'utf8').split('\n').filter(Boolean)
+let fail = 0
+
+for (const md of files) {
+  if (!fs.existsSync(md)) continue
+  const text = fs.readFileSync(md, 'utf8')
+  const blocks = [...text.matchAll(/```mermaid\n([\s\S]*?)```/g)].map((m) => m[1])
+  for (let i = 0; i < blocks.length; i++) {
+    try {
+      await mermaid.parse(blocks[i])
+    } catch (err) {
+      fail = 1
+      const msg = err && err.message ? err.message : String(err)
+      console.log(`Mermaid parse failed in ${md} (block ${i + 1}):`)
+      console.log(msg)
+    }
+  }
+}
+
+process.exit(fail)
+JS
+)
