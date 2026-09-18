@@ -1,0 +1,12 @@
+# Paths relative to shared/. install: is relative to the consumer repo root.
+assets:
+  - shared: skills/review-diff-SKILL.md
+    install: skills/review-diff/SKILL.md
+  - shared: skills/close-the-loop-SKILL.md
+    install: skills/close-the-loop/SKILL.md
+  - shared: agents/reviewer.md
+    install: agents/reviewer.md
+  - shared: tools/mcp.yaml
+    install: shared-tools/mcp.yaml
+  - shared: verify/stages.fragment.yaml
+    install: .verify/shared-stages.fragment.yaml

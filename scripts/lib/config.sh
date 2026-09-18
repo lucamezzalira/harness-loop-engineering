@@ -33,6 +33,11 @@ HARNESS_DEFAULTS_JSON='{
     "stopOnIdenticalFailures": 2,
     "confirmOnTreeDrift": true,
     "enumerateFirst": true
+  },
+  "limits": {
+    "agentsMdTokens": 800,
+    "agentFileTokens": 1200,
+    "skillBodyLines": 60
   }
 }'
 
@@ -97,6 +102,9 @@ _harness_setting_because() {
     loop.stopOnIdenticalFailures) echo "it is how the loop concludes the agent is stuck rather than working" ;;
     loop.confirmOnTreeDrift) echo "silent resumption onto a moved tree is the worst failure this system can produce" ;;
     loop.enumerateFirst) echo "a fresh loop needs features.json before it implements, or later sessions invent done" ;;
+    limits.agentsMdTokens) echo "always-on context that exceeds this budget steers less and costs more" ;;
+    limits.agentFileTokens) echo "a role prompt above this size usually wants a skill, not more prose" ;;
+    limits.skillBodyLines) echo "skills above roughly sixty body lines travel badly and should be split" ;;
     *) echo "the harness cannot interpret a value of the wrong type" ;;
   esac
 }
@@ -129,7 +137,7 @@ _harness_validate_value() {
     trace.enabled|review.enabled|review.requireVerifyGreen|verify.failFast|loop.confirmOnTreeDrift|loop.enumerateFirst)
       [[ "$typ" == "boolean" ]] || _harness_config_type_error "$key" "boolean" "$actual"
       ;;
-    trace.retainSessions|review.maxCycles|verify.maxStopRetries|verify.editTierBudgetMs|loop.maxTurns|loop.maxSeconds|loop.stopOnIdenticalFailures)
+    trace.retainSessions|review.maxCycles|verify.maxStopRetries|verify.editTierBudgetMs|loop.maxTurns|loop.maxSeconds|loop.stopOnIdenticalFailures|limits.agentsMdTokens|limits.agentFileTokens|limits.skillBodyLines)
       if [[ "$typ" != "number" ]] || [[ "$(jq 'floor == .' <<<"$json_val")" != "true" ]]; then
         _harness_config_type_error "$key" "integer" "$actual"
       fi

@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# branch-convention: warn when on a feat/* branch that does not match feat/<TASK-ID>-<slug>.
+# Advisory only. Skips main/master/release/* and detached HEAD (CI).
+set -euo pipefail
+root="${VERIFY_ROOT:-$PWD}"
+root="$(cd "$root" && pwd)"
+
+if ! git -C "$root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  exit 0
+fi
+
+branch="$(git -C "$root" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+if [[ -z "$branch" || "$branch" == "HEAD" ]]; then
+  exit 0
+fi
+case "$branch" in
+  main|master|develop|trunk) exit 0 ;;
+  release/*|hotfix/*) exit 0 ;;
+esac
+
+# Only enforce naming when the branch claims to be a feature branch.
+case "$branch" in
+  feat/*)
+    if [[ "$branch" =~ ^feat/[A-Z]+-[0-9]+-[a-z0-9][a-z0-9-]*$ ]]; then
+      exit 0
+    fi
+    echo "branch-convention: '${branch}' should match feat/<TASK-ID>-<slug> (example: feat/JIRA-123-welcome-mail)"
+    exit 1
+    ;;
+esac
+exit 0

@@ -72,3 +72,11 @@ loop:
   # the definition of done; within one attended session the agent already has
   # its own list.
   enumerateFirst: true
+
+# Context size gates used by the context-budget stage. Inventory of stages
+# lives in .verify/stages/stages.yaml, not here.
+limits:
+  agentsMdTokens: 800
+  agentFileTokens: 1200
+  # Skills above this body-line count (frontmatter excluded) should be split.
+  skillBodyLines: 60

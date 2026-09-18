@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# harness-drift: compare harness.lock hashes to installed files and upstream.
+# 1) local matches lock and upstream: pass
+# 2) local matches lock, upstream moved: warn (behind is a decision)
+# 3) local differs from lock: exit 1 (local edit; send upstream)
+# Contract-class assets (manifest name contains contracts) use exit 1 when behind
+# so D7 stays visible in CI (adversarial A6).
+set -euo pipefail
+command -v yq >/dev/null || exit 2
+command -v python3 >/dev/null || exit 2
+command -v shasum >/dev/null || exit 2
+
+root="${VERIFY_ROOT:-$PWD}"
+root="$(cd "$root" && pwd)"
+lock="$root/harness.lock"
+
+if [[ ! -f "$lock" ]]; then
+  exit 0
+fi
+
+HARNESS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source_path="$(yq -r '.source // ""' "$lock")"
+manifest_name="$(yq -r '.manifest // "MANIFEST.yaml"' "$lock")"
+
+if [[ -z "$source_path" ]]; then
+  echo "harness.lock missing source" >&2
+  exit 2
+fi
+
+if [[ "$source_path" = /* ]]; then
+  src="$source_path"
+elif [[ -d "$root/$source_path" ]]; then
+  src="$(cd "$root/$source_path" && pwd)"
+elif [[ -d "$HARNESS_ROOT/$source_path" ]]; then
+  src="$(cd "$HARNESS_ROOT/$source_path" && pwd)"
+else
+  echo "harness-drift: cannot resolve source ${source_path}" >&2
+  exit 2
+fi
+
+manifest="$src/$manifest_name"
+if [[ ! -f "$manifest" ]]; then
+  echo "harness-drift: manifest missing ${manifest}" >&2
+  exit 2
+fi
+
+python3 - "$root" "$src" "$manifest" "$lock" "$manifest_name" <<'PY'
+import hashlib, json, os, subprocess, sys
+
+root, src, manifest, lock_path, manifest_name = sys.argv[1:6]
+strict_behind = "contract" in manifest_name.lower()
+
+def shasum(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+assets = json.loads(subprocess.check_output(["yq", "-o", "json", ".", manifest], text=True)).get("assets") or []
+lock = json.loads(subprocess.check_output(["yq", "-o", "json", ".", lock_path], text=True))
+installed = dict(lock.get("installed") or {})
+
+fail = 0
+warn = 0
+for a in assets:
+    install_rel = a["install"]
+    shared_path = os.path.join(src, a["shared"])
+    dest = os.path.join(root, install_rel)
+    lock_hash = installed.get(install_rel)
+    if not os.path.isfile(dest):
+        print(f"harness-drift: missing installed file {install_rel}")
+        fail = 1
+        continue
+    if not os.path.isfile(shared_path):
+        print(f"harness-drift: missing upstream file {shared_path}")
+        fail = 1
+        continue
+    local_hash = shasum(dest)
+    up_hash = shasum(shared_path)
+    if lock_hash and local_hash != lock_hash:
+        print(
+            f"harness-drift: local edit in {install_rel}\n"
+            f"  This usually means a local fix that should have gone upstream ({a['shared']})."
+        )
+        fail = 1
+    elif lock_hash and local_hash == lock_hash and lock_hash != up_hash:
+        msg = f"harness-drift: behind upstream on {install_rel} (pin still matches local)"
+        if strict_behind:
+            print(msg + " [contracts: failing]")
+            fail = 1
+        else:
+            print(msg + " [warn]")
+            warn = 1
+    elif not lock_hash:
+        print(f"harness-drift: {install_rel} not recorded in harness.lock")
+        fail = 1
+
+sys.exit(1 if fail else 0)
+PY

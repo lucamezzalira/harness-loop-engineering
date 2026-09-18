@@ -1,0 +1,9 @@
+source: shared
+version: local
+manifest: MANIFEST.yaml
+installed:
+  .verify/shared-stages.fragment.yaml: 2ec85c54f983f69c98ebe1fe0899aede4c34eeea981724ad9c3e739e14120f7f
+  agents/reviewer.md: 0f2d425f00f86365101b26e2d53745cc5ed3be1662e7266a4f4ff6877db20223
+  shared-tools/mcp.yaml: 46bdd429b7bd2ee2357aef706d2e3a605a1b84afc76f665d9253248a8a5dbd64
+  skills/close-the-loop/SKILL.md: a2d6adb3134d0f63aab7ea7beafa2e48b1dfe8f47a4ccb71d4f736951aa4485a
+  skills/review-diff/SKILL.md: 8754c69cfc7099686296f9334c29b4578740747f3cd417bbb72b12b5db3e3c51

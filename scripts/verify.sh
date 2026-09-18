@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # scripts/verify.sh
 # Run verification stages up to a tier: edit, turn, or commit (default).
+# Stage inventory lives in .verify/stages.yaml (sole source of truth).
 # Config: verify.failFast, verify.editTierBudgetMs. The config file is optional.
 # Nothing in this repo parses stdout. Hooks, CI, loop.sh and eval read report.json.
 
@@ -19,6 +20,10 @@ Usage: scripts/verify.sh [edit|turn|commit]
        scripts/verify.sh -v|--version
 
 Runs every stage up to and including the named tier. Default: commit.
+
+Stage list, order, tier, and advisory flags come from stages.yaml next to the
+stage scripts (or the path in VERIFY_STAGES). Filenames are implementations
+only; do not infer policy from NN- prefixes.
 
 Exit codes
   0  pass
@@ -50,6 +55,7 @@ fi
 harness_config_load "$HARNESS_ROOT"
 harness_need_cmd jq
 harness_need_cmd python3
+harness_need_cmd yq
 
 tier="commit"
 if [[ ${#HARNESS_CLI_POSITIONAL[@]} -gt 0 ]]; then
@@ -70,32 +76,53 @@ export VERIFY_ROOT
 export VERIFY_TIER="$tier"
 export VERIFY_CHANGED_FILES="${VERIFY_CHANGED_FILES:-}"
 
-resolve_stages_dir() {
-  if [[ -n "${VERIFY_STAGES:-}" && -d "${VERIFY_STAGES}" ]]; then
-    printf '%s\n' "$(cd "$VERIFY_STAGES" && pwd)"
+# Resolve stages.yaml. VERIFY_STAGES may be the file itself or a directory
+# containing stages.yaml (legacy env from scenario.sh).
+resolve_stages_manifest() {
+  local candidate
+  if [[ -n "${VERIFY_STAGES:-}" ]]; then
+    if [[ -f "${VERIFY_STAGES}" ]]; then
+      printf '%s\n' "$(cd "$(dirname "${VERIFY_STAGES}")" && pwd)/$(basename "${VERIFY_STAGES}")"
+      return
+    fi
+    if [[ -d "${VERIFY_STAGES}" && -f "${VERIFY_STAGES}/stages.yaml" ]]; then
+      printf '%s\n' "$(cd "${VERIFY_STAGES}" && pwd)/stages.yaml"
+      return
+    fi
+    echo "VERIFY_STAGES set but no stages.yaml at ${VERIFY_STAGES}" >&2
+    exit 2
+  fi
+  for candidate in \
+    "$VERIFY_ROOT/.verify/stages/stages.yaml" \
+    "$HARNESS_ROOT/.verify/stages.yaml"
+  do
+    if [[ -f "$candidate" ]]; then
+      printf '%s\n' "$(cd "$(dirname "$candidate")" && pwd)/$(basename "$candidate")"
+      return
+    fi
+  done
+  # Also accept stages.yaml beside a stages dir under VERIFY_ROOT/.verify/
+  if [[ -f "$VERIFY_ROOT/.verify/stages.yaml" ]]; then
+    printf '%s\n' "$(cd "$VERIFY_ROOT/.verify" && pwd)/stages.yaml"
     return
   fi
-  if [[ -d "$VERIFY_ROOT/.verify/stages" ]]; then
-    printf '%s\n' "$VERIFY_ROOT/.verify/stages"
-    return
-  fi
-  if [[ -d "$HARNESS_ROOT/.verify/stages" ]]; then
-    printf '%s\n' "$HARNESS_ROOT/.verify/stages"
-    return
-  fi
-  echo "no stages directory found" >&2
+  echo "no stages.yaml found (set VERIFY_STAGES or add .verify/stages.yaml)" >&2
   exit 2
 }
 
-VERIFY_STAGES="$(resolve_stages_dir)"
-export VERIFY_STAGES
+STAGES_MANIFEST="$(resolve_stages_manifest)"
+STAGES_DIR="$(cd "$(dirname "$STAGES_MANIFEST")" && pwd)"
+export VERIFY_STAGES="$STAGES_DIR"
+export VERIFY_STAGES_MANIFEST="$STAGES_MANIFEST"
 
-max_num=99
-case "$tier" in
-  edit) max_num=29 ;;
-  turn) max_num=59 ;;
-  commit) max_num=99 ;;
-esac
+tier_rank() {
+  case "$1" in
+    edit) echo 1 ;;
+    turn) echo 2 ;;
+    commit) echo 3 ;;
+    *) echo 99 ;;
+  esac
+}
 
 fail_fast="$(harness_config_get verify.failFast)"
 budget_ms="$(harness_config_get verify.editTierBudgetMs)"
@@ -105,46 +132,109 @@ started_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 start_ms="$(python3 -c 'import time; print(int(time.time()*1000))')"
 
 stages_tmp=$(mktemp)
-trap 'rm -f "$stages_tmp"' EXIT
+stage_list=$(mktemp)
+trap 'rm -f "$stages_tmp" "$stage_list"' EXIT
 : >"$stages_tmp"
 
 overall="pass"
 overall_exit=0
+want_rank="$(tier_rank "$tier")"
 
 truncate_output() {
   python3 -c 'import sys; t=sys.stdin.read(); print(t[:8000], end="")'
 }
 
+# Load manifest into stage_list as TSV: id\ttier\trun\tadvisory\tsummary
+if ! yq -o json '.' "$STAGES_MANIFEST" >/dev/null 2>&1; then
+  echo "stages.yaml is malformed: ${STAGES_MANIFEST}" >&2
+  exit 2
+fi
+
+stage_count="$(yq -o json '.' "$STAGES_MANIFEST" | jq '.stages // [] | length')"
+if [[ "$stage_count" -eq 0 ]]; then
+  echo "stages.yaml has no stages: ${STAGES_MANIFEST}" >&2
+  exit 2
+fi
+
+yq -o json '.' "$STAGES_MANIFEST" | jq -r '
+  .stages[] |
+  [
+    .id,
+    .tier,
+    .run,
+    (if .advisory == true then "1" else "0" end),
+    (.summary // "")
+  ] | @tsv
+' >"$stage_list"
+
+# Orphan check: every physical executable in STAGES_DIR (not a symlink) must be
+# referenced by some run: entry. Symlinks to shared scripts are ignored here;
+# overlays list them explicitly via relative paths.
+python3 - "$STAGES_DIR" "$STAGES_MANIFEST" <<'PY' || exit 2
+import json, os, subprocess, sys
+stages_dir, manifest = sys.argv[1], sys.argv[2]
+raw = subprocess.check_output(["yq", "-o", "json", ".", manifest], text=True)
+data = json.loads(raw)
+runs = set()
+for s in data.get("stages") or []:
+    run = s.get("run") or ""
+    # basename match for local scripts; also full resolved path
+    runs.add(os.path.basename(run))
+    abs_run = run if os.path.isabs(run) else os.path.normpath(os.path.join(stages_dir, run))
+    runs.add(os.path.basename(abs_run))
+
+orphans = []
+for name in os.listdir(stages_dir):
+    if name in ("stages.yaml",) or name.startswith("."):
+        continue
+    path = os.path.join(stages_dir, name)
+    if os.path.islink(path):
+        continue
+    if not os.path.isfile(path):
+        continue
+    if not os.access(path, os.X_OK):
+        continue
+    if name not in runs:
+        orphans.append(name)
+if orphans:
+    print(
+        "stages.yaml orphan executables (not listed in run:): "
+        + ", ".join(sorted(orphans)),
+        file=sys.stderr,
+    )
+    sys.exit(1)
+PY
+
 run_stage() {
-  local path=$1
-  local name
-  name="$(basename "$path")"
-  local num="${name%%-*}"
-  # skip non-numeric
-  case "$num" in
-    ''|*[!0-9]*) return 0 ;;
-  esac
-  if (( 10#$num > max_num )); then
-    return 0
+  local id=$1
+  local stage_tier=$2
+  local run_rel=$3
+  local advisory=$4
+  local path
+
+  if [[ "$run_rel" = /* ]]; then
+    path="$run_rel"
+  else
+    path="$STAGES_DIR/$run_rel"
+  fi
+  path="$(cd "$(dirname "$path")" && pwd)/$(basename "$path")"
+
+  if [[ ! -f "$path" ]]; then
+    echo "stage ${id}: missing run path ${run_rel}" >&2
+    overall="fail"
+    overall_exit=2
+    return 2
   fi
   if [[ ! -x "$path" ]]; then
-    echo "stage ${name} is not executable" >&2
+    echo "stage ${id} is not executable (${path})" >&2
     overall="fail"
     overall_exit=2
     return 2
   fi
 
-  local stage_start stage_end duration out_file ec status advisory
-  advisory=0
-  case "$name" in
-    *.advisory) advisory=1 ;;
-  esac
-
+  local stage_start stage_end duration out_file ec status
   out_file=$(mktemp)
   stage_start="$(python3 -c 'import time; print(int(time.time()*1000))')"
-  # Do not toggle set -e here. set is process-global, so re-enabling it inside
-  # this function would make a non-zero return abort the caller before the
-  # report is written.
   ec=0
   (
     cd "$VERIFY_ROOT"
@@ -163,7 +253,7 @@ run_stage() {
     overall="fail"
     overall_exit=2
   elif [[ $ec -ne 0 ]]; then
-    if [[ $advisory -eq 1 ]]; then
+    if [[ "$advisory" == "1" ]]; then
       status="warn"
     else
       status="fail"
@@ -184,7 +274,7 @@ run_stage() {
   fi
 
   jq -nc \
-    --arg name "$name" \
+    --arg name "$id" \
     --arg status "$status" \
     --argjson exitCode "$ec" \
     --argjson durationMs "$duration" \
@@ -192,7 +282,7 @@ run_stage() {
     '{name:$name,status:$status,exitCode:$exitCode,durationMs:$durationMs,output:$output}' \
     >>"$stages_tmp"
 
-  printf '  %-24s %s (%dms, exit %d)\n' "$name" "$status" "$duration" "$ec" >&2
+  printf '  %-24s %s (%dms, exit %d)\n' "$id" "$status" "$duration" "$ec" >&2
   if [[ -n "$output" && "$status" != "pass" ]]; then
     printf '%s\n' "$output" | sed 's/^/    /' >&2
   fi
@@ -206,32 +296,24 @@ run_stage() {
   return 0
 }
 
-echo "verify: tier=${tier} root=${VERIFY_ROOT} stages=${VERIFY_STAGES}" >&2
+echo "verify: tier=${tier} root=${VERIFY_ROOT} manifest=${STAGES_MANIFEST}" >&2
 
-# Numeric order by filename. -L follows symlinks so example stage dirs can
-# link to the generic set (find -type f otherwise skips symlink entries).
-stage_list=$(mktemp)
-trap 'rm -f "$stages_tmp" "$stage_list"' EXIT
-find -L "$VERIFY_STAGES" -maxdepth 1 -type f \( -perm -100 -o -perm -10 -o -perm -1 \) \
-  | while IFS= read -r p; do basename "$p"; done \
-  | sort \
-  | while IFS= read -r base; do printf '%s\n' "$VERIFY_STAGES/$base"; done \
-  >"$stage_list" || true
-
-# find -perm portability: also include all non-hidden files and chmod +x expectation.
-if [[ ! -s "$stage_list" ]]; then
-  find -L "$VERIFY_STAGES" -maxdepth 1 -type f ! -name '.*' ! -name '*.md' \
-    | while IFS= read -r p; do basename "$p"; done \
-    | sort \
-    | while IFS= read -r base; do printf '%s\n' "$VERIFY_STAGES/$base"; done \
-    >"$stage_list"
-fi
-
-while IFS= read -r stage_path; do
-  [[ -z "$stage_path" ]] && continue
-  [[ -f "$stage_path" ]] || continue
+while IFS=$'\t' read -r sid stier srun sadvisory ssummary; do
+  [[ -z "$sid" ]] && continue
+  case "$stier" in
+    edit|turn|commit) ;;
+    *)
+      echo "stage ${sid}: invalid tier '${stier}'" >&2
+      overall="fail"
+      overall_exit=2
+      break
+      ;;
+  esac
+  if (( $(tier_rank "$stier") > want_rank )); then
+    continue
+  fi
   set +e
-  run_stage "$stage_path"
+  run_stage "$sid" "$stier" "$srun" "$sadvisory"
   rc=$?
   set -e
   if [[ $rc -eq 2 ]]; then

@@ -1,0 +1,10 @@
+# Fragment of stage entries consumers may merge into their stages.yaml by hand.
+# Not auto-merged: composition stays a local decision (adversarial A4).
+# ids here are suggestions for portable checks shipped under shared verify scripts later.
+suggested:
+  - id: harness-drift
+    tier: turn
+    summary: Compare harness.lock hashes to installed shared assets.
+  - id: no-tool-secrets
+    tier: turn
+    summary: Fail when rendered tool config contains credential-like values.

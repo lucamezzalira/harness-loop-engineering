@@ -1,0 +1,75 @@
+# Newsletter verify inventory. Full replacement overlay (not a merge): every
+# stage that should run for this example is listed here. Shared scripts are
+# referenced by relative path into the harness root stages directory.
+
+stages:
+  - id: format
+    tier: edit
+    run: ../../../../.verify/stages/10-format
+    summary: Prettier check on changed or all matched files.
+
+  - id: context-budget
+    tier: edit
+    run: ../../../../.verify/stages/15-context-budget
+    summary: Token and line budgets for AGENTS.md, role prompts, and skills.
+
+  - id: context-nesting
+    tier: edit
+    run: ../../../../.verify/stages/16-context-nesting
+    summary: Nested AGENTS.md must not repeat substantial lines from ancestors.
+
+  - id: lint
+    tier: edit
+    run: ../../../../.verify/stages/20-lint
+    summary: ESLint on the TypeScript tree.
+
+  - id: docs
+    tier: edit
+    run: ../../../../.verify/stages/25-docs
+    summary: Mermaid blocks in markdown must parse.
+
+  - id: types
+    tier: turn
+    run: ../../../../.verify/stages/30-types
+    summary: TypeScript compiler with no emit.
+
+  - id: unit
+    tier: turn
+    run: ../../../../.verify/stages/40-unit
+    summary: Vitest unit tests for changed or all packages.
+
+  - id: features
+    tier: turn
+    run: 45-features
+    summary: Falsify passes claims in features.json when that file exists.
+
+  - id: boundaries
+    tier: turn
+    run: ../../../../.verify/stages/50-boundaries
+    summary: dependency-cruiser architectural rules when configured.
+
+  - id: service-boundaries
+    tier: turn
+    run: 55-service-boundaries
+    summary: email-service must not deep-import subscription-service internals.
+
+  - id: contracts
+    tier: turn
+    run: 56-contracts
+    summary: Shared contract package shape stays consistent.
+
+  - id: build
+    tier: commit
+    run: ../../../../.verify/stages/70-build
+    summary: Production build or compile step when configured.
+
+  - id: deps
+    tier: commit
+    run: ../../../../.verify/stages/80-deps.advisory
+    advisory: true
+    summary: Dependency audit advisory; warns and does not fail the gate.
+
+  - id: suite
+    tier: commit
+    run: ../../../../.verify/stages/90-suite
+    summary: Full test suite beyond the unit stage.

@@ -1,0 +1,7 @@
+# Canonical MCP server list. Names and URLs only. Credentials never live here.
+# Rendered into tool-specific locations by adapters/render.sh.
+servers:
+  - name: github
+    url: https://api.github.com/mcp
+  - name: docs
+    url: https://docs.example.com/mcp

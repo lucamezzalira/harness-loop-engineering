@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
-# 15-context-budget: fail when AGENTS.md or a rendered agent exceeds a token budget.
-# Rough tokens = ceil(chars / 4). A repo that argues context bloat costs success
-# rate should prove it practises that.
+# context-budget: fail when AGENTS.md, role prompts, or skills exceed limits.
+# Tokens for always-on context files; body lines for skills (excl. frontmatter).
 set -euo pipefail
 command -v awk >/dev/null || exit 2
+
+HARNESS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../../scripts/lib/config.sh
+source "$HARNESS_ROOT/scripts/lib/config.sh"
+harness_config_load "$HARNESS_ROOT"
+
 root="${VERIFY_ROOT:-$PWD}"
-AGENTS_BUDGET=800
-AGENT_BUDGET=1200
+AGENTS_BUDGET="$(harness_config_get limits.agentsMdTokens)"
+AGENT_BUDGET="$(harness_config_get limits.agentFileTokens)"
+SKILL_LINES="$(harness_config_get limits.skillBodyLines)"
+# Nested AGENTS.md share the root budget unless overridden.
+NESTED_BUDGET="$(harness_config_get limits.agentsMdTokens)"
 
 tokens() {
   local chars
@@ -14,15 +22,48 @@ tokens() {
   awk -v c="$chars" 'BEGIN { print int((c + 3) / 4) }'
 }
 
+# Body lines: after closing frontmatter ---, or whole file if none.
+skill_body_lines() {
+  python3 - "$1" <<'PY'
+import sys
+text = open(sys.argv[1], encoding="utf-8").read().splitlines()
+if text and text[0].strip() == "---":
+    for i in range(1, len(text)):
+        if text[i].strip() == "---":
+            body = text[i + 1 :]
+            break
+    else:
+        body = text
+else:
+    body = text
+# Drop leading blank lines from the count noise
+while body and not body[0].strip():
+    body = body[1:]
+print(len(body))
+PY
+}
+
 fail=0
-agents="$root/AGENTS.md"
-if [[ -f "$agents" ]]; then
-  t=$(tokens "$agents")
-  if (( t > AGENTS_BUDGET )); then
-    echo "AGENTS.md is ${t} tokens (budget ${AGENTS_BUDGET})"
+
+check_agents_file() {
+  local f=$1 budget=$2
+  [[ -f "$f" ]] || return 0
+  local t
+  t=$(tokens "$f")
+  if (( t > budget )); then
+    echo "${f#$root/} is ${t} tokens (limit ${budget}). Split into nested AGENTS.md or a skill rather than trimming meaning away."
     fail=1
   fi
-fi
+}
+
+check_agents_file "$root/AGENTS.md" "$AGENTS_BUDGET"
+
+# Nested context files (M02): same token budget per file.
+while IFS= read -r -d '' f; do
+  check_agents_file "$f" "$NESTED_BUDGET"
+done < <(find "$root" -name AGENTS.md -not -path "$root/AGENTS.md" \
+  -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/.scenarios/*' \
+  -print0 2>/dev/null || true)
 
 for dir in "$root/.claude/agents" "$root/.cursor/agents" "$root/agents"; do
   [[ -d "$dir" ]] || continue
@@ -33,10 +74,20 @@ for dir in "$root/.claude/agents" "$root/.cursor/agents" "$root/agents"; do
     esac
     t=$(tokens "$f")
     if (( t > AGENT_BUDGET )); then
-      echo "${f#$root/} is ${t} tokens (budget ${AGENT_BUDGET})"
+      echo "${f#$root/} is ${t} tokens (limit ${AGENT_BUDGET}). Split the role rather than trimming."
       fail=1
     fi
   done
 done
+
+# Skills: body line budget (default 60).
+while IFS= read -r -d '' f; do
+  lines=$(skill_body_lines "$f")
+  if (( lines > SKILL_LINES )); then
+    echo "${f#$root/} is ${lines} body lines (limit ${SKILL_LINES}). Split into two skills rather than trimming."
+    fail=1
+  fi
+done < <(find "$root/skills" "$root/.claude/skills" -type f -name 'SKILL.md' \
+  -not -path '*/node_modules/*' -print0 2>/dev/null || true)
 
 exit "$fail"

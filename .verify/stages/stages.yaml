@@ -1,0 +1,82 @@
+# .verify/stages.yaml
+# Sole inventory of verification stages. verify.sh runs this list; the stage
+# scripts are the implementations. Do not infer order or tier from filenames.
+# VERIFY_STAGES may point at this file or at a directory that contains it.
+
+stages:
+  - id: format
+    tier: edit
+    run: 10-format
+    summary: Prettier check on changed or all matched files.
+
+  - id: context-budget
+    tier: edit
+    run: 15-context-budget
+    summary: Token and line budgets for AGENTS.md, role prompts, and skills.
+
+  - id: context-nesting
+    tier: edit
+    run: 16-context-nesting
+    summary: Nested AGENTS.md must not repeat substantial lines from ancestors.
+
+  - id: lint
+    tier: edit
+    run: 20-lint
+    summary: ESLint on the TypeScript tree.
+
+  - id: docs
+    tier: edit
+    run: 25-docs
+    summary: Mermaid blocks in markdown must parse.
+
+  - id: types
+    tier: turn
+    run: 30-types
+    summary: TypeScript compiler with no emit.
+
+  - id: branch-convention
+    tier: turn
+    run: 32-branch-convention.advisory
+    advisory: true
+    summary: feat/* branches should match feat/<TASK-ID>-<slug>; skips main and detached HEAD.
+
+  - id: harness-drift
+    tier: turn
+    run: 35-harness-drift
+    summary: Compare harness.lock hashes to installed shared assets and upstream.
+
+  - id: unit
+    tier: turn
+    run: 40-unit
+    summary: Vitest unit tests for changed or all packages.
+
+  - id: no-tool-secrets
+    tier: turn
+    run: 42-no-tool-secrets
+    summary: Fail when rendered tool config contains credential-like values.
+
+  - id: features
+    tier: turn
+    run: 45-features
+    summary: Falsify passes claims in features.json when that file exists.
+
+  - id: boundaries
+    tier: turn
+    run: 50-boundaries
+    summary: dependency-cruiser architectural rules when configured.
+
+  - id: build
+    tier: commit
+    run: 70-build
+    summary: Production build or compile step when configured.
+
+  - id: deps
+    tier: commit
+    run: 80-deps.advisory
+    advisory: true
+    summary: Dependency audit advisory; warns and does not fail the gate.
+
+  - id: suite
+    tier: commit
+    run: 90-suite
+    summary: Full test suite beyond the unit stage.

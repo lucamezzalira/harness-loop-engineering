@@ -239,6 +239,34 @@ if [[ "$RENDER_CURSOR" -eq 1 && "$CHECK" -eq 0 ]]; then
   mkdir -p "$HARNESS_ROOT/.cursor/agents"
 fi
 
+# Tool list from shared/tools/mcp.yaml. Names and URLs only.
+render_mcp() {
+  local src="$HARNESS_ROOT/shared/tools/mcp.yaml"
+  [[ -f "$src" ]] || return 0
+  local json
+  json="$(yq -o json '.' "$src")"
+  if [[ "$RENDER_CURSOR" -eq 1 ]]; then
+    # Cursor MCP project config: mcpServers map. Verified shape against Cursor
+    # docs pattern (url servers). No env secrets.
+    local cursor_mcp
+    cursor_mcp="$(jq -c '
+      reduce .servers[] as $s ({mcpServers:{}};
+        .mcpServers[$s.name] = {url: $s.url})
+    ' <<<"$json")"
+    _harness_write_json "$HARNESS_ROOT/.cursor/mcp.json" "$cursor_mcp"
+  fi
+  if [[ "$RENDER_CLAUDE" -eq 1 ]]; then
+    # Claude Code project MCP file. Same constraint: URLs only.
+    local claude_mcp
+    claude_mcp="$(jq -c '
+      reduce .servers[] as $s ({mcpServers:{}};
+        .mcpServers[$s.name] = {type:"http", url: $s.url})
+    ' <<<"$json")"
+    _harness_write_json "$HARNESS_ROOT/.mcp.json" "$claude_mcp"
+  fi
+}
+render_mcp
+
 if [[ "$CHECK" -eq 1 && "$STALE" -eq 1 ]]; then
   exit 1
 fi

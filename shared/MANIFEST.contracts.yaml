@@ -1,0 +1,4 @@
+# Shared contract for multi-repo lessons. Consumers pin this file via harness.lock.
+assets:
+  - shared: contracts/src/index.ts
+    install: packages/contracts/src/index.ts

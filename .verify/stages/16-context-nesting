@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# context-nesting: fail when a nested AGENTS.md repeats a substantial line
+# from an ancestor. Short boilerplate lines are ignored (min length).
+set -euo pipefail
+command -v python3 >/dev/null || exit 2
+root="${VERIFY_ROOT:-$PWD}"
+root="$(cd "$root" && pwd)"
+MIN_LEN=40
+
+python3 - "$root" "$MIN_LEN" <<'PY'
+import os, re, sys
+
+root = sys.argv[1]
+min_len = int(sys.argv[2])
+heading = re.compile(r"^\s{0,3}#{1,6}\s")
+
+def load(path):
+    lines = []
+    with open(path, encoding="utf-8") as f:
+        for raw in f:
+            line = raw.strip()
+            if not line or heading.match(line):
+                continue
+            # HTML comments
+            if line.startswith("<!--"):
+                continue
+            if len(line) < min_len:
+                continue
+            norm = re.sub(r"\s+", " ", line).lower()
+            lines.append((norm, line))
+    return lines
+
+agents = []
+for dirpath, dirnames, filenames in os.walk(root):
+    dirnames[:] = [d for d in dirnames if d not in (".git", "node_modules", ".scenarios", ".harness")]
+    if "AGENTS.md" in filenames:
+        agents.append(os.path.join(dirpath, "AGENTS.md"))
+
+agents.sort(key=lambda p: (p.count(os.sep), p))
+fail = 0
+for child in agents:
+    child_dir = os.path.dirname(child)
+    ancestors = []
+    for cand in agents:
+        if cand == child:
+            continue
+        cand_dir = os.path.dirname(cand)
+        if child_dir == cand_dir:
+            continue
+        # ancestor: cand_dir is a prefix of child_dir
+        if child_dir.startswith(cand_dir.rstrip(os.sep) + os.sep) or cand_dir == root:
+            if cand_dir == root or child_dir.startswith(cand_dir + os.sep):
+                ancestors.append(cand)
+    # root AGENTS.md is ancestor of everything under root
+    root_agents = os.path.join(root, "AGENTS.md")
+    if child != root_agents and os.path.isfile(root_agents) and root_agents not in ancestors:
+        ancestors.append(root_agents)
+
+    child_lines = load(child)
+    for anc in ancestors:
+        anc_set = {n for n, _ in load(anc)}
+        for norm, original in child_lines:
+            if norm in anc_set:
+                rel_c = os.path.relpath(child, root)
+                rel_a = os.path.relpath(anc, root)
+                print(
+                    f"{rel_c} repeats a line from ancestor {rel_a}:\n  {original}\n"
+                    "Keep the child file to what is special about that directory."
+                )
+                fail = 1
+sys.exit(fail)
+PY
