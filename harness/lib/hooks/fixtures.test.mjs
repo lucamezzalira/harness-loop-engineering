@@ -6,10 +6,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+// Source templates are committed; .cursor/hooks/ is gitignored and only exists after --render.
+const HOOKS_SRC = path.join(ROOT, 'harness', 'render', 'cursor', 'hooks');
 
 function runThin(script, payload) {
-  const scriptPath = path.join(ROOT, '.cursor', 'hooks', script);
-  assert.ok(fs.existsSync(scriptPath), `missing ${scriptPath}; run ./verify.sh --render first`);
+  const scriptPath = path.join(HOOKS_SRC, script);
+  assert.ok(fs.existsSync(scriptPath), `missing ${scriptPath}`);
   return spawnSync('bash', [scriptPath], {
     cwd: ROOT,
     input: JSON.stringify(payload),
@@ -73,11 +75,9 @@ test('BOM-prefixed JSON still parses in --hook', () => {
 });
 
 test('thin adapter scripts do not invoke a runtime binary', () => {
-  const dir = path.join(ROOT, 'harness', 'render', 'cursor', 'hooks');
-  for (const name of fs.readdirSync(dir)) {
+  for (const name of fs.readdirSync(HOOKS_SRC)) {
     assert.ok(name.endsWith('.sh'), `adapter should be shell-only, found ${name}`);
-    const body = fs.readFileSync(path.join(dir, name), 'utf8');
-    // Strip comments before scanning for runtimes
+    const body = fs.readFileSync(path.join(HOOKS_SRC, name), 'utf8');
     const code = body
       .split('\n')
       .filter((l) => !/^\s*#/.test(l))
