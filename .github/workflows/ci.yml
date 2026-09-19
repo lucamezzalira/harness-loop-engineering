@@ -1,0 +1,51 @@
+name: Harness CI
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install
+      - name: Unit tests
+        run: npm test
+      - name: Hook fail-open
+        run: |
+          out=$(echo '{}' | ./verify.sh --hook 2>/dev/null)
+          echo "$out" | grep -q failOpen
+          test "$(echo '{}' | ./verify.sh --hook >/dev/null 2>&1; echo $?)" -eq 0
+      - name: Render copies thin hooks
+        run: |
+          printf '%s\n' 'tool: cursor' 'profile: default' 'hooks:' '  enable: false' '  failClosed: false' > harness.local.yaml
+          ./verify.sh --render
+          test -f .cursor/hooks/before-shell.sh
+          test -f .cursor/hooks.json
+          grep -q '"hooks": {}' .cursor/hooks.json || grep -q '"hooks":{}' .cursor/hooks.json
+          ! test -f .cursor/hooks/before-shell.mjs
+      - name: Example estate tests
+        run: |
+          cd examples/two-services
+          npm install
+          npm test
+      - name: Help and version
+        run: |
+          ./verify.sh --help
+          ./verify.sh --version
+      - name: Flag errors
+        run: |
+          ./verify.sh --edit --turn && exit 1 || test $? -eq 2
+          ./verify.sh --nope && exit 1 || test $? -eq 2
+      - name: Context-budget check
+        run: |
+          # secrets will exit 2 without gitleaks — install it
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz | tar -xz gitleaks
+          sudo mv gitleaks /usr/local/bin/
+          ./verify.sh --edit || true
+      - name: Render requires tool
+        run: |
+          ./verify.sh --render && exit 1 || test $? -eq 2

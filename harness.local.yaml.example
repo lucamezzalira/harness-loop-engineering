@@ -1,0 +1,10 @@
+# Set exactly one tool. There is no default.
+tool: cursor
+profile: default
+confirmProfile: true
+
+# Split-event Cursor hooks (see harness/render/cursor/HOOKS.md)
+# Keep enable:false until fixture tests pass: npm test
+hooks:
+  enable: false
+  failClosed: false   # when enable:true, applies only to beforeShell/beforeMCP

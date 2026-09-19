@@ -1,0 +1,111 @@
+# Single source of order, tier, blocking status and enablement.
+# Filenames in checks/ carry no meaning — this file is authoritative.
+
+sensors:
+  - name: format
+    tier: edit
+    blocking: true
+    enabled: true
+    missing: skip
+
+  - name: lint
+    tier: edit
+    blocking: true
+    enabled: true
+    missing: skip
+
+  - name: context-budget
+    tier: edit
+    blocking: true
+    enabled: true
+    missing: n/a
+
+  - name: complexity
+    tier: turn
+    blocking: true
+    enabled: true
+    missing: skip
+
+  - name: types
+    tier: turn
+    blocking: false
+    enabled: true
+    missing: skip
+
+  - name: secrets
+    tier: turn
+    blocking: true
+    enabled: true
+    missing: exit2
+
+  - name: unit
+    tier: turn
+    blocking: true
+    enabled: true
+    missing: skip
+
+  - name: env
+    tier: turn
+    blocking: true
+    enabled: true
+    missing: skip
+
+  - name: boundaries
+    tier: turn
+    blocking: true
+    enabled: true
+    missing: skip
+
+  - name: contracts
+    tier: turn
+    blocking: true
+    enabled: true
+    missing: skip
+
+  - name: acceptance
+    tier: turn
+    blocking: true
+    enabled: true
+    missing: skip
+
+  - name: deadcode
+    tier: turn
+    blocking: false
+    enabled: true
+    missing: skip
+
+  - name: duplication
+    tier: commit
+    blocking: false
+    enabled: true
+    missing: skip
+
+  - name: audit
+    tier: commit
+    blocking: false
+    enabled: true
+    missing: skip
+
+  - name: sast
+    tier: commit
+    blocking: false
+    enabled: true
+    missing: skip
+
+  - name: mutation
+    tier: commit
+    blocking: false
+    enabled: true
+    missing: skip
+
+  - name: prsize
+    tier: commit
+    blocking: false
+    enabled: true
+    missing: n/a
+
+  - name: runtime-drift
+    tier: manual
+    blocking: false
+    enabled: true
+    missing: skip

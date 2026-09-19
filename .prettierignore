@@ -1,0 +1,12 @@
+node_modules/
+harness/state/
+.cursor/
+.claude/
+.codex/
+package-lock.json
+examples/two-services/package-lock.json
+examples/two-services/node_modules/
+coverage/
+dist/
+worktrees/
+*.log

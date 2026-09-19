@@ -1,0 +1,13 @@
+{
+  "name": "two-services-example",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "services/*"
+  ],
+  "scripts": {
+    "test": "node --test services/*/test/*.test.js packages/*/test/*.test.js",
+    "smoke": "node scripts/smoke-runtime-drift.js"
+  }
+}

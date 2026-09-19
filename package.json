@@ -1,0 +1,21 @@
+{
+  "name": "harness-loop-engineering",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "Standalone harness for Node.js microservices coding agents",
+  "bin": {
+    "harness-verify": "./verify.sh"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "verify": "./verify.sh",
+    "test": "node --test harness/lib/severity.test.mjs harness/lib/panel/dispatch.test.mjs harness/lib/enforce/pre_tool.test.mjs harness/lib/hooks/fixtures.test.mjs"
+  },
+  "dependencies": {
+    "yaml": "^2.7.0"
+  }
+}

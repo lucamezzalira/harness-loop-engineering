@@ -1,0 +1,64 @@
+project:
+  packageManager: npm
+  moduleSystem: esm
+  servicesGlob: 'services/*'
+  contractsPackage: '@acme/contracts'
+  infraPaths: ['infra/**']
+
+roles:
+  reviewer: { enabled: true }
+  test-writer: { enabled: true }
+  security: { enabled: true }
+  product: { enabled: true }
+  planner: { enabled: true }
+  qa: { enabled: false }
+  infra: { enabled: false }
+
+review:
+  maxCycles: 3
+  blockAt: [P0, P1]
+  requireGreen: true
+  cadence:
+    turn: [reviewer]
+    unit: [reviewer, security, product, qa]
+  triggers:
+    security: ['services/**/auth/**', '**/log*.js', '**/*secret*']
+    infra: ['infra/**', 'terraform/**']
+    product: ['specs/**']
+
+severity:
+  secret-exposed: P0
+  pii-in-logs: P0
+  boundary-violation: P0
+  contract-breaking: P0
+  acceptance-unmet: P1
+  missing-idempotency: P1
+  error-swallowed: P1
+  duplication: P2
+  naming: P3
+  style: P3
+  default: P2
+
+backlog:
+  maxItems: 50
+  expireP3Sessions: 3
+  promoteAfterUnits: 3
+
+baseline:
+  agentsMdLines: null
+  duplicatedBlocks: null
+  maxComplexity: null
+
+verify:
+  failFast: true
+  maxStopRetries: 2
+  editBudgetMs: 1000
+
+logs:
+  enabled: false
+  level: events
+  retainSessions: 10
+
+limits:
+  agentsMdLines: 200
+  skillBodyLines: 60

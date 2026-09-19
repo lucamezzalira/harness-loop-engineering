@@ -1,0 +1,49 @@
+providers:
+  anthropic:
+    type: api
+  local:
+    type: openai-compatible
+    baseUrl: http://localhost:11434/v1
+
+tiers:
+  deep:
+    provider: anthropic
+    id: claude-opus-5
+  balanced:
+    provider: anthropic
+    id: claude-sonnet-5
+  fast:
+    provider: anthropic
+    id: claude-haiku-4-5-20251001
+  local-deep:
+    provider: local
+    id: qwen3-coder:30b
+  local-fast:
+    provider: local
+    id: qwen3:8b
+
+profiles:
+  default:
+    planner: deep
+    reviewer: deep
+    security: deep
+    product: balanced
+    infra: balanced
+    test-writer: balanced
+    qa: fast
+  offline:
+    planner: local-deep
+    reviewer: local-deep
+    security: local-deep
+    product: local-deep
+    infra: local-fast
+    test-writer: local-fast
+    qa: local-fast
+  cheap:
+    planner: deep
+    reviewer: balanced
+    security: deep
+    product: fast
+    infra: fast
+    test-writer: fast
+    qa: fast

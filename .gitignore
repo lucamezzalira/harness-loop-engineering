@@ -1,0 +1,14 @@
+node_modules/
+harness/state/*
+!harness/state/.gitkeep
+harness.local.yaml
+.claude/
+.cursor/
+.codex/
+*.log
+.DS_Store
+coverage/
+.nyc_output/
+dist/
+tmp/
+worktrees/
