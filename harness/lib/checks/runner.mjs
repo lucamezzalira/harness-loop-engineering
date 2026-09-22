@@ -3,17 +3,23 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { computeTreeHash } from '../tree-hash.mjs';
 import { writeReport } from '../report.mjs';
-import { loadSensors, wrapWithGuidance, changedFiles } from './common.mjs';
+import {
+  loadSensors,
+  wrapWithGuidance,
+  changedFiles,
+  resolveHarnessEnv,
+} from './common.mjs';
 
 const TIER_RANK = { edit: 0, turn: 1, commit: 2, manual: 99 };
 
 /**
  * @param {string} root
  * @param {object} config
- * @param {{ tier: string, files?: string[], failFast?: boolean }} opts
+ * @param {{ tier: string, files?: string[], failFast?: boolean, harnessEnv?: 'local' | 'ci' }} opts
  */
 export async function runChecks(root, config, opts) {
   const started = Date.now();
+  const harnessEnv = opts.harnessEnv || resolveHarnessEnv(process.env);
   const sensors = loadSensors(root).filter((s) => s.enabled !== false);
   const targetRank = TIER_RANK[opts.tier];
   if (targetRank == null) {
@@ -22,11 +28,42 @@ export async function runChecks(root, config, opts) {
     throw err;
   }
 
-  const toRun = sensors.filter((s) => {
+  // Environment filter runs before tier filter (W0).
+  const inEnv = [];
+  const deferredToCi = [];
+  const skippedLocalOnly = [];
+  for (const s of sensors) {
+    const where = s.where || ['local', 'ci'];
+    if (where.includes(harnessEnv)) {
+      inEnv.push(s);
+      continue;
+    }
+    if (harnessEnv === 'local' && where.includes('ci') && !where.includes('local')) {
+      deferredToCi.push(s.name);
+    } else if (harnessEnv === 'ci' && where.includes('local') && !where.includes('ci')) {
+      skippedLocalOnly.push(s.name);
+    }
+  }
+
+  const toRun = inEnv.filter((s) => {
     const r = TIER_RANK[s.tier];
     if (s.tier === 'manual') return opts.tier === 'manual';
     return r <= targetRank;
   });
+
+  // Deferred/skipped lists are scoped to sensors that would have been in this
+  // tier plan if environment had allowed them (same tier rule as toRun).
+  const tierWouldInclude = (s) => {
+    const r = TIER_RANK[s.tier];
+    if (s.tier === 'manual') return opts.tier === 'manual';
+    return r <= targetRank;
+  };
+  const deferredThisTier = sensors
+    .filter((s) => deferredToCi.includes(s.name) && tierWouldInclude(s))
+    .map((s) => s.name);
+  const skippedThisTier = sensors
+    .filter((s) => skippedLocalOnly.includes(s.name) && tierWouldInclude(s))
+    .map((s) => s.name);
 
   const filesForEdit =
     opts.tier === 'edit'
@@ -38,6 +75,7 @@ export async function runChecks(root, config, opts) {
   const envBase = {
     ...process.env,
     HARNESS_ROOT: root,
+    HARNESS_ENV: harnessEnv,
     HARNESS_TIER: opts.tier,
     HARNESS_CHANGED_FILES: filesForEdit.join('\n'),
     HARNESS_CONFIG_JSON: JSON.stringify(config),
@@ -133,11 +171,14 @@ export async function runChecks(root, config, opts) {
 
   const report = {
     tier: opts.tier,
+    env: harnessEnv,
     status: harnessBroken ? 'harness-error' : 'pass',
     hasWarnings: hasWarnings || results.some((r) => r.status === 'warn'),
     treeHash: computeTreeHash(root),
     durationMs: Date.now() - started,
     checks: results,
+    deferredToCi: deferredThisTier,
+    skippedLocalOnly: skippedThisTier,
   };
 
   if (!harnessBroken) {
@@ -175,4 +216,25 @@ export function reportExitCode(report) {
   if (report.checks?.some((c) => c.exitCode === 2 || c.status === 'harness-error')) return 2;
   if (report.status === 'fail') return 1;
   return 0;
+}
+
+/**
+ * Print deferred / skipped-where sections (W4).
+ * @param {object} report
+ * @param {{ log?: (s: string) => void }} [opts]
+ */
+export function printWhereSummary(report, opts = {}) {
+  const log = opts.log || console.log;
+  const deferred = report.deferredToCi || [];
+  const skipped = report.skippedLocalOnly || [];
+  if (deferred.length) {
+    log('');
+    log(`Deferred to CI (${deferred.length} sensor${deferred.length === 1 ? '' : 's'}):`);
+    log(`  ${deferred.join(', ')}`);
+  }
+  if (skipped.length) {
+    log('');
+    log(`Skipped (local-only, ${skipped.length} sensor${skipped.length === 1 ? '' : 's'}):`);
+    log(`  ${skipped.join(', ')}`);
+  }
 }

@@ -1,143 +1,175 @@
-# Single source of order, tier, blocking status, enablement and missing-tool policy.
-# Filenames in checks/ carry no meaning — this file is authoritative.
-# Every entry requires: name, tier, blocking, enabled, missing.
+# Single source of order, tier, environment scope, blocking status, enablement
+# and missing-tool policy. Filenames in checks/ carry no meaning — this file
+# is authoritative.
+# Every entry requires: name, tier, where, blocking, enabled, missing.
+# where: [local], [ci], or [local, ci]
 # missing: skip | warn | exit2 | n/a
 
 sensors:
   - name: format
     tier: edit
+    where: [local, ci]
     blocking: true
     enabled: true
     missing: skip
 
   - name: lint
     tier: edit
+    where: [local, ci]
     blocking: true
     enabled: true
     missing: skip
 
   - name: context-budget
     tier: edit
+    where: [local, ci]
     blocking: true
+    enabled: true
+    missing: n/a
+
+  - name: session-state
+    tier: edit
+    where: [local]
+    blocking: false
     enabled: true
     missing: n/a
 
   - name: complexity
     tier: turn
+    where: [local, ci]
     blocking: true
     enabled: true
     missing: skip
 
   - name: types
     tier: turn
+    where: [local, ci]
     blocking: false
     enabled: true
     missing: skip
 
   - name: secrets
     tier: turn
+    where: [local, ci]
     blocking: true
     enabled: true
     missing: exit2
 
   - name: unit
     tier: turn
+    where: [local, ci]
     blocking: true
     enabled: true
     missing: skip
 
   - name: env
     tier: turn
+    where: [local, ci]
     blocking: true
     enabled: true
     missing: skip
 
   - name: env-declared
     tier: turn
+    where: [local, ci]
     blocking: true
     enabled: true
     missing: n/a
 
   - name: boundaries
     tier: turn
+    where: [local, ci]
     blocking: true
     enabled: true
     missing: skip
 
   - name: contracts
     tier: turn
+    where: [local, ci]
     blocking: true
     enabled: true
     missing: skip
 
   - name: acceptance
     tier: turn
+    where: [local, ci]
     blocking: true
     enabled: true
     missing: n/a
 
   - name: adr-frontmatter
     tier: turn
+    where: [local, ci]
     blocking: true
     enabled: true
     missing: n/a
 
   - name: adr-index
     tier: turn
+    where: [local, ci]
     blocking: true
     enabled: true
     missing: n/a
 
   - name: diff-scope
     tier: turn
+    where: [local, ci]
     blocking: true
     enabled: true
     missing: n/a
 
   - name: rule-shape
     tier: turn
+    where: [local, ci]
     blocking: true
     enabled: true
     missing: n/a
 
   - name: deadcode
     tier: turn
+    where: [local, ci]
     blocking: false
     enabled: true
     missing: skip
 
   - name: duplication
     tier: commit
+    where: [local, ci]
     blocking: false
     enabled: true
     missing: skip
 
   - name: audit
     tier: commit
+    where: [ci]
     blocking: false
     enabled: true
     missing: skip
 
   - name: sast
     tier: commit
-    blocking: false
+    where: [ci]
+    blocking: true
     enabled: true
-    missing: skip
+    missing: exit2
 
   - name: mutation
     tier: commit
+    where: [ci]
     blocking: false
     enabled: true
     missing: skip
 
   - name: prsize
     tier: commit
+    where: [ci]
     blocking: false
     enabled: true
     missing: n/a
 
   - name: runtime-drift
     tier: manual
+    where: [ci]
     blocking: false
     enabled: true
     missing: skip

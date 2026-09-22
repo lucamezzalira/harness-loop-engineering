@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig, formatAssignmentBlock, requireTool } from './config.mjs';
-import { runChecks, reportExitCode } from './checks/runner.mjs';
+import { runChecks, reportExitCode, printWhereSummary } from './checks/runner.mjs';
+import { resolveHarnessEnv } from './checks/common.mjs';
 import { writeReport, readReport } from './report.mjs';
 import { computeTreeHash } from './tree-hash.mjs';
 import { runInstall } from './install.mjs';
@@ -159,6 +160,15 @@ async function main() {
   // Ensure state dir
   fs.mkdirSync(path.join(ROOT, 'harness', 'state'), { recursive: true });
 
+  let harnessEnv;
+  try {
+    harnessEnv = resolveHarnessEnv(process.env);
+    process.env.HARNESS_ENV = harnessEnv;
+  } catch (e) {
+    console.error(e.message);
+    process.exit(e.exitCode || 2);
+  }
+
   let config;
   try {
     config = loadConfig(ROOT);
@@ -169,12 +179,12 @@ async function main() {
 
   try {
     if (parsed.action === 'verify') {
-      const report = await runChecks(ROOT, config, { tier: parsed.tier });
+      const report = await runChecks(ROOT, config, { tier: parsed.tier, harnessEnv });
       const code = reportExitCode(report);
       if (code !== 0) {
         console.error(
           JSON.stringify(
-            { status: report.status, tier: report.tier, treeHash: report.treeHash },
+            { status: report.status, tier: report.tier, env: report.env, treeHash: report.treeHash },
             null,
             2,
           ),
@@ -184,10 +194,12 @@ async function main() {
         )) {
           console.error(`\n[${c.name}] ${c.status}\n${c.output || c.reason || ''}`);
         }
+        printWhereSummary(report, { log: console.error });
       } else {
         console.log(
-          `pass tier=${report.tier} treeHash=${report.treeHash} (${report.durationMs}ms)`,
+          `pass tier=${report.tier} env=${report.env} treeHash=${report.treeHash} (${report.durationMs}ms)`,
         );
+        printWhereSummary(report);
       }
       process.exit(code);
     }
@@ -213,6 +225,7 @@ async function main() {
       const enforcement = config.hooks?.enable !== false ? 'on' : 'off';
       console.log(`enforcement: ${enforcement}`);
       console.log(`tool: ${config.tool} · profile: ${config.profile || 'default'}`);
+      console.log(`env: ${harnessEnv} (HARNESS_ENV)`);
       console.log(`prd: ${config.loop?.prd || '(none)'}`);
       console.log('');
       console.log(formatAssignmentBlock(config));

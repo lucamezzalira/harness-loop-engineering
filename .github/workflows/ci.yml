@@ -6,8 +6,12 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-24.04
+    env:
+      HARNESS_ENV: ci
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
@@ -17,6 +21,8 @@ jobs:
         run: |
           curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz | tar -xz gitleaks
           sudo mv gitleaks /usr/local/bin/
+      - name: Install semgrep
+        run: pip install --user semgrep
       - name: Unit tests
         run: npm test
       - name: Hook fail-open
@@ -43,7 +49,8 @@ jobs:
           ! test -f .cursor/hooks/before-mcp.sh
       - name: Status shows enforcement on
         run: |
-          ./verify.sh --status | head -3 | grep -q 'enforcement: on'
+          ./verify.sh --status | head -4 | grep -q 'enforcement: on'
+          ./verify.sh --status | grep -q 'env: ci'
       - name: Example estate tests
         run: |
           cd examples/two-services
@@ -57,11 +64,11 @@ jobs:
         run: |
           ./verify.sh --edit --turn && exit 1 || test $? -eq 2
           ./verify.sh --nope && exit 1 || test $? -eq 2
-      - name: Edit tier
+      - name: Verify (edit tier)
         run: ./verify.sh --edit || true
-      - name: Turn tier
+      - name: Verify (turn tier)
         run: ./verify.sh --turn
-      - name: Commit tier
+      - name: Verify (commit tier)
         run: ./verify.sh
       - name: Agent commit refused via hook
         run: |

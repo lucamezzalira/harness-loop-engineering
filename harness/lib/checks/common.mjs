@@ -3,16 +3,73 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { parse as parseYaml } from 'yaml';
 
-const REQUIRED_SENSOR_KEYS = ['name', 'tier', 'blocking', 'enabled', 'missing'];
+const REQUIRED_SENSOR_KEYS = ['name', 'tier', 'where', 'blocking', 'enabled', 'missing'];
 const VALID_MISSING = new Set(['skip', 'warn', 'exit2', 'n/a']);
 const VALID_TIERS = new Set(['edit', 'turn', 'commit', 'manual']);
+const VALID_WHERE = new Set(['local', 'ci']);
 
 /**
- * Load sensors.yaml — single source of order, tier, blocking, enablement, missing.
+ * Resolve harness environment from HARNESS_ENV.
+ * Unset → local. Explicit only; never infer from $CI.
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {'local' | 'ci'}
+ */
+export function resolveHarnessEnv(env = process.env) {
+  const raw = env.HARNESS_ENV;
+  if (raw == null || String(raw).trim() === '') return 'local';
+  const v = String(raw).trim();
+  if (v !== 'local' && v !== 'ci') {
+    const err = new Error(`HARNESS_ENV must be "local" or "ci", got "${v}"`);
+    err.exitCode = 2;
+    throw err;
+  }
+  return v;
+}
+
+/**
+ * Normalize and validate `where`. Empty arrays are a config error.
+ * @param {unknown} where
+ * @param {string} label
+ * @returns {('local' | 'ci')[]}
+ */
+export function normalizeWhere(where, label = 'sensor') {
+  if (where == null) {
+    return ['local', 'ci'];
+  }
+  if (!Array.isArray(where)) {
+    const err = new Error(`sensors.yaml entry "${label}" where must be an array`);
+    err.exitCode = 2;
+    throw err;
+  }
+  if (where.length === 0) {
+    const err = new Error(
+      `sensors.yaml entry "${label}" where: [] is invalid (a sensor that runs nowhere is a bug)`,
+    );
+    err.exitCode = 2;
+    throw err;
+  }
+  const out = [];
+  for (const w of where) {
+    if (!VALID_WHERE.has(w)) {
+      const err = new Error(
+        `sensors.yaml entry "${label}" where entry "${w}" is invalid; allowed: local, ci`,
+      );
+      err.exitCode = 2;
+      throw err;
+    }
+    if (!out.includes(w)) out.push(w);
+  }
+  return out;
+}
+
+/**
+ * Load sensors.yaml — single source of order, tier, where, blocking, enablement, missing.
  * Filenames carry no meaning. Unknown keys or values exit 2 naming the entry.
  * @param {string} root
+ * @param {{ requireWhere?: boolean }} [opts]
  */
-export function loadSensors(root) {
+export function loadSensors(root, opts = {}) {
+  const requireWhere = opts.requireWhere !== false;
   const p = path.join(root, 'harness', 'sensors', 'sensors.yaml');
   if (!fs.existsSync(p)) {
     const err = new Error(`Missing ${p}`);
@@ -21,9 +78,11 @@ export function loadSensors(root) {
   }
   const doc = parseYaml(fs.readFileSync(p, 'utf8'));
   const sensors = doc.sensors || [];
+  const allowed = new Set(REQUIRED_SENSOR_KEYS);
   for (const [i, s] of sensors.entries()) {
     const label = s?.name || `#${i}`;
     for (const key of REQUIRED_SENSOR_KEYS) {
+      if (key === 'where' && !requireWhere && !('where' in (s || {}))) continue;
       if (!(key in (s || {}))) {
         const err = new Error(`sensors.yaml entry "${label}" missing required field "${key}"`);
         err.exitCode = 2;
@@ -31,7 +90,7 @@ export function loadSensors(root) {
       }
     }
     for (const key of Object.keys(s)) {
-      if (!REQUIRED_SENSOR_KEYS.includes(key)) {
+      if (!allowed.has(key)) {
         const err = new Error(`sensors.yaml entry "${label}" has unknown key "${key}"`);
         err.exitCode = 2;
         throw err;
@@ -54,6 +113,7 @@ export function loadSensors(root) {
       err.exitCode = 2;
       throw err;
     }
+    s.where = normalizeWhere(s.where, label);
   }
   return sensors;
 }
