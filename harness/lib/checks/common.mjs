@@ -3,9 +3,13 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { parse as parseYaml } from 'yaml';
 
+const REQUIRED_SENSOR_KEYS = ['name', 'tier', 'blocking', 'enabled', 'missing'];
+const VALID_MISSING = new Set(['skip', 'warn', 'exit2', 'n/a']);
+const VALID_TIERS = new Set(['edit', 'turn', 'commit', 'manual']);
+
 /**
- * Load sensors.yaml — single source of order, tier, blocking, enablement.
- * Filenames carry no meaning.
+ * Load sensors.yaml — single source of order, tier, blocking, enablement, missing.
+ * Filenames carry no meaning. Unknown keys or values exit 2 naming the entry.
  * @param {string} root
  */
 export function loadSensors(root) {
@@ -16,7 +20,42 @@ export function loadSensors(root) {
     throw err;
   }
   const doc = parseYaml(fs.readFileSync(p, 'utf8'));
-  return doc.sensors || [];
+  const sensors = doc.sensors || [];
+  for (const [i, s] of sensors.entries()) {
+    const label = s?.name || `#${i}`;
+    for (const key of REQUIRED_SENSOR_KEYS) {
+      if (!(key in (s || {}))) {
+        const err = new Error(`sensors.yaml entry "${label}" missing required field "${key}"`);
+        err.exitCode = 2;
+        throw err;
+      }
+    }
+    for (const key of Object.keys(s)) {
+      if (!REQUIRED_SENSOR_KEYS.includes(key)) {
+        const err = new Error(`sensors.yaml entry "${label}" has unknown key "${key}"`);
+        err.exitCode = 2;
+        throw err;
+      }
+    }
+    if (!VALID_MISSING.has(s.missing)) {
+      const err = new Error(
+        `sensors.yaml entry "${label}" missing must be skip|warn|exit2|n/a, got "${s.missing}"`,
+      );
+      err.exitCode = 2;
+      throw err;
+    }
+    if (!VALID_TIERS.has(s.tier)) {
+      const err = new Error(`sensors.yaml entry "${label}" invalid tier "${s.tier}"`);
+      err.exitCode = 2;
+      throw err;
+    }
+    if (typeof s.blocking !== 'boolean' || typeof s.enabled !== 'boolean') {
+      const err = new Error(`sensors.yaml entry "${label}" blocking and enabled must be booleans`);
+      err.exitCode = 2;
+      throw err;
+    }
+  }
+  return sensors;
 }
 
 /**
@@ -90,4 +129,20 @@ export function wrapWithGuidance(root, name, toolOutput) {
   const g = loadGuidance(root, name);
   if (!g) return toolOutput;
   return `${g}\n\n--- tool output ---\n${toolOutput}`;
+}
+
+/**
+ * Count executable lines in a check script (excludes shebang, blank, comment-only lines).
+ * @param {string} content
+ */
+export function countExecutableLines(content) {
+  return content
+    .split('\n')
+    .filter((l) => {
+      const t = l.trim();
+      if (!t) return false;
+      if (t.startsWith('#!')) return false;
+      if (t.startsWith('#')) return false;
+      return true;
+    }).length;
 }

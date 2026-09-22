@@ -62,3 +62,17 @@ logs:
 limits:
   agentsMdLines: 200
   skillBodyLines: 60
+
+# Enforcement layer. If you set enable: false, agents can ship without hooks
+# refusing commits / running edit-tier checks. Prefer narrowing matchers over
+# turning this off. Recover a wedged Cursor adapter with:
+#   echo '{"version":1,"hooks":{}}' > .cursor/hooks.json
+hooks:
+  enable: true
+  failClosed: false
+
+loop:
+  prd: specs/example-idempotent-consumers/PRD.md
+  maxTurns: 20
+  maxSeconds: 1800
+  maxCostUsd: 5.0

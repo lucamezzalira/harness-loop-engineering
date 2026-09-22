@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { which } from '../checks/common.mjs';
+import { invokeFake } from './fake-provider.mjs';
 
 /**
  * Invoke a role: B primary (host tool CLI), fallback A (provider API).
@@ -16,6 +17,10 @@ import { which } from '../checks/common.mjs';
 export async function invokeRole(opts) {
   const { root, config, binding, systemPrompt, userPrompt, expect = 'json' } = opts;
   const tool = config.tool;
+
+  if (process.env.HARNESS_FAKE_PROVIDER === '1') {
+    return invokeFake({ binding, systemPrompt, userPrompt, expect });
+  }
 
   // B: host tool CLI
   const host = await tryHostTool({ tool, root, binding, systemPrompt, userPrompt, expect });

@@ -1,5 +1,7 @@
-# Single source of order, tier, blocking status and enablement.
+# Single source of order, tier, blocking status, enablement and missing-tool policy.
 # Filenames in checks/ carry no meaning — this file is authoritative.
+# Every entry requires: name, tier, blocking, enabled, missing.
+# missing: skip | warn | exit2 | n/a
 
 sensors:
   - name: format
@@ -50,6 +52,12 @@ sensors:
     enabled: true
     missing: skip
 
+  - name: env-declared
+    tier: turn
+    blocking: true
+    enabled: true
+    missing: n/a
+
   - name: boundaries
     tier: turn
     blocking: true
@@ -66,7 +74,7 @@ sensors:
     tier: turn
     blocking: true
     enabled: true
-    missing: skip
+    missing: n/a
 
   - name: deadcode
     tier: turn

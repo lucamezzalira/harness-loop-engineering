@@ -307,18 +307,29 @@ function ensureEslintAgentRules(root) {
       'max-lines': ['warn', 400],
       'max-lines-per-function': ['warn', 80],
       complexity: ['warn', 15],
+      'no-process-env': 'error',
     },
+    overrides: [
+      {
+        files: ['**/config/env.js', '**/config/env.mjs', '**/config/env.ts', '**/config/env.cjs'],
+        rules: { 'no-process-env': 'off' },
+      },
+    ],
   };
-  if (fs.existsSync(flat) || fs.existsSync(legacy)) {
-    // Do not overwrite; write a companion fragment the team can merge
-    const frag = path.join(root, 'harness', 'templates', 'eslint-agent-rules.json');
-    fs.mkdirSync(path.dirname(frag), { recursive: true });
-    fs.writeFileSync(frag, JSON.stringify(snippet, null, 2) + '\n');
-    return;
-  }
+  // Always write mergeable fragment for teams with existing eslint configs
+  const frag = path.join(root, 'harness', 'templates', 'eslint-agent-rules.json');
+  fs.mkdirSync(path.dirname(frag), { recursive: true });
+  fs.writeFileSync(frag, JSON.stringify(snippet, null, 2) + '\n');
+
+  if (fs.existsSync(flat) || fs.existsSync(legacy)) return;
+
   fs.writeFileSync(
     legacy,
-    `module.exports = ${JSON.stringify({ env: { node: true, es2022: true }, rules: snippet.rules }, null, 2)};\n`,
+    `module.exports = ${JSON.stringify(
+      { env: { node: true, es2022: true }, rules: snippet.rules, overrides: snippet.overrides },
+      null,
+      2,
+    )};\n`,
   );
 }
 

@@ -1,0 +1,22 @@
+{
+  "entries": [
+    {
+      "id": "A-01",
+      "description": "Duplicate order.confirmed with same idempotency key charges once",
+      "passes": false,
+      "test": null
+    },
+    {
+      "id": "A-02",
+      "description": "Distinct keys create distinct charges",
+      "passes": false,
+      "test": null
+    },
+    {
+      "id": "A-03",
+      "description": "Billing does not import orders internals",
+      "passes": false,
+      "test": null
+    }
+  ]
+}

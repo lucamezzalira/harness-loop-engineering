@@ -3,8 +3,8 @@ tool: cursor
 profile: default
 confirmProfile: true
 
-# Split-event Cursor hooks (see harness/render/cursor/HOOKS.md)
-# Keep enable:false until fixture tests pass: npm test
+# Hooks default on in harness.yaml. Override here only if you must disable.
+# failClosed applies to beforeShell (and optional beforeMCP) when true.
 hooks:
-  enable: false
-  failClosed: false   # when enable:true, applies only to beforeShell/beforeMCP
+  enable: true
+  failClosed: false

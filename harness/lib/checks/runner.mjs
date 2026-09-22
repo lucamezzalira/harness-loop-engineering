@@ -1,9 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { spawnSync } from 'node:child_process';
 import { computeTreeHash } from '../tree-hash.mjs';
 import { writeReport } from '../report.mjs';
-import { loadSensors, wrapWithGuidance } from './common.mjs';
+import { loadSensors, wrapWithGuidance, changedFiles } from './common.mjs';
 
 const TIER_RANK = { edit: 0, turn: 1, commit: 2, manual: 99 };
 
@@ -28,50 +28,101 @@ export async function runChecks(root, config, opts) {
     return r <= targetRank;
   });
 
+  const filesForEdit =
+    opts.tier === 'edit'
+      ? opts.files?.length
+        ? opts.files
+        : changedFiles(root)
+      : [];
+
+  const envBase = {
+    ...process.env,
+    HARNESS_ROOT: root,
+    HARNESS_TIER: opts.tier,
+    HARNESS_CHANGED_FILES: filesForEdit.join('\n'),
+    HARNESS_CONFIG_JSON: JSON.stringify(config),
+    HARNESS_BASELINE_JSON: JSON.stringify(config.baseline || {}),
+  };
+
   const results = [];
   let overall = 'pass';
   let harnessBroken = false;
+  let hasWarnings = false;
 
   for (const sensor of toRun) {
     const checkStarted = Date.now();
+    const scriptPath = path.join(root, 'harness', 'sensors', 'checks', `${sensor.name}.sh`);
     let result;
-    try {
-      const modPath = path.join(root, 'harness', 'sensors', 'checks', `${sensor.name}.mjs`);
-      if (!fs.existsSync(modPath)) {
-        result = {
-          name: sensor.name,
-          status: 'skipped',
-          reason: `check module missing: harness/sensors/checks/${sensor.name}.mjs`,
-        };
-      } else {
-        const mod = await import(pathToFileURL(modPath).href);
-        result = await mod.run({ root, config, files: opts.files, sensor });
-      }
-    } catch (e) {
+
+    if (!fs.existsSync(scriptPath)) {
       result = {
         name: sensor.name,
-        status: 'fail',
-        exitCode: 1,
-        output: String(e.stack || e.message || e),
+        status: 'harness-error',
+        exitCode: 2,
+        reason: `check script missing: harness/sensors/checks/${sensor.name}.sh`,
+        output: `check script missing: harness/sensors/checks/${sensor.name}.sh`,
       };
+      harnessBroken = true;
+      overall = 'fail';
+    } else {
+      const res = spawnSync('bash', [scriptPath], {
+        cwd: root,
+        env: envBase,
+        encoding: 'utf8',
+        timeout: 600_000,
+        maxBuffer: 8 * 1024 * 1024,
+      });
+      const code = res.status ?? (res.error ? 2 : 1);
+      const stderr = (res.stderr || '').trim();
+      const stdout = (res.stdout || '').trim();
+      const combined = [stdout, stderr].filter(Boolean).join('\n');
+
+      if (code === 0) {
+        result = { name: sensor.name, status: 'pass', exitCode: 0, output: combined || 'ok' };
+      } else if (code === 3) {
+        result = mapMissing(sensor, stderr || stdout || 'tool not installed');
+        if (result.status === 'harness-error') {
+          harnessBroken = true;
+          overall = 'fail';
+        } else if (result.status === 'warn') {
+          hasWarnings = true;
+          if (overall === 'pass') overall = 'warn';
+        }
+      } else if (code === 2) {
+        result = {
+          name: sensor.name,
+          status: 'harness-error',
+          exitCode: 2,
+          reason: combined || 'check broken',
+          output: combined || 'check broken',
+        };
+        harnessBroken = true;
+        overall = 'fail';
+      } else {
+        // exit 1 (or other): code under test is wrong
+        if (sensor.blocking) {
+          result = {
+            name: sensor.name,
+            status: 'fail',
+            exitCode: 1,
+            output: wrapWithGuidance(root, sensor.name, combined || 'failed'),
+          };
+          overall = 'fail';
+        } else {
+          result = {
+            name: sensor.name,
+            status: 'warn',
+            exitCode: 1,
+            output: combined || 'failed',
+          };
+          hasWarnings = true;
+          if (overall === 'pass') overall = 'warn';
+        }
+      }
     }
 
     result.name = sensor.name;
     result.durationMs = Date.now() - checkStarted;
-
-    if (result.status === 'fail' && sensor.blocking) {
-      result.output = wrapWithGuidance(root, sensor.name, result.output || result.reason || '');
-      overall = 'fail';
-    } else if (result.status === 'fail' && !sensor.blocking) {
-      result.status = result.status === 'fail' ? 'warn' : result.status;
-      if (overall === 'pass') overall = 'warn';
-    }
-
-    if (result.status === 'harness-error' || result.exitCode === 2) {
-      harnessBroken = true;
-      overall = 'fail';
-    }
-
     results.push(result);
 
     if (harnessBroken) break;
@@ -82,24 +133,41 @@ export async function runChecks(root, config, opts) {
 
   const report = {
     tier: opts.tier,
-    status: harnessBroken ? 'harness-error' : overall === 'warn' ? 'pass' : overall,
-    advisory: overall === 'warn',
+    status: harnessBroken ? 'harness-error' : 'pass',
+    hasWarnings: hasWarnings || results.some((r) => r.status === 'warn'),
     treeHash: computeTreeHash(root),
     durationMs: Date.now() - started,
     checks: results,
   };
 
-  // Advisory-only fails must not block: status pass with advisory flag when only warns
   if (!harnessBroken) {
-    const blockingFail = results.some((r) => {
-      const sensor = toRun.find((s) => s.name === r.name);
-      return sensor?.blocking && (r.status === 'fail' || r.status === 'harness-error');
-    });
+    const blockingFail = results.some((r) => r.status === 'fail' || r.status === 'harness-error');
     report.status = blockingFail ? 'fail' : 'pass';
   }
 
   writeReport(root, report);
   return report;
+}
+
+/**
+ * Exit 3 from a check: tool absent. Registry decides meaning.
+ */
+function mapMissing(sensor, reason) {
+  const policy = sensor.missing;
+  if (policy === 'exit2') {
+    return {
+      name: sensor.name,
+      status: 'harness-error',
+      exitCode: 2,
+      reason,
+      output: reason,
+    };
+  }
+  if (policy === 'warn') {
+    return { name: sensor.name, status: 'warn', reason, output: reason };
+  }
+  // skip or n/a
+  return { name: sensor.name, status: 'skipped', reason, output: reason };
 }
 
 export function reportExitCode(report) {

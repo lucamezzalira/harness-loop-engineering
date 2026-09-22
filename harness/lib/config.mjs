@@ -61,8 +61,12 @@ export const DEFAULTS = Object.freeze({
     agentsMdLines: 200,
     skillBodyLines: 60,
   },
+  hooks: {
+    enable: true,
+    failClosed: false,
+  },
   loop: {
-    prd: null,
+    prd: 'specs/example-idempotent-consumers/PRD.md',
     maxTurns: null,
     maxSeconds: 1800,
     maxCostUsd: 5.0,

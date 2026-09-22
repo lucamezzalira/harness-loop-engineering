@@ -1,6 +1,6 @@
-# Harness for Node.js microservices
+# Harness for Node projects
 
-A standalone harness you drop into a Node service repository or the root of a microservices monorepo. One executable is the entry point: `./verify.sh`.
+A standalone harness you drop into a Node repository. One executable is the entry point: `./verify.sh`.
 
 It gives the coding agent a fixed set of guides, a fixed set of sensors, a small number of moments where it can be refused, and a review panel that runs on every piece of work.
 
@@ -223,22 +223,16 @@ Turn-tier `complexity` runs eslint's `complexity` rule on changed files. With `b
 
 If every agent tool fails with `Hook … --hook`:
 
-1. Empty the adapter:
+1. Clear the adapter (one-liner):
    ```bash
    echo '{"version":1,"hooks":{}}' > .cursor/hooks.json
    ```
 2. **Developer: Reload Window**.
-3. Keep the split-event adapter off until fixtures pass:
-   ```yaml
-   hooks:
-     enable: false
-     failClosed: false
-   ```
-   Then `./verify.sh --render` (copies `.cursor/hooks/*.sh` but leaves `hooks.json` empty).
-4. Fixture-test without Cursor: `node --test harness/lib/hooks/fixtures.test.mjs`
-5. Enable with `hooks.enable: true` (optionally `failClosed: true` for shell/MCP only).
+3. Fix the underlying issue (see `harness/render/cursor/HOOKS.md`), then `./verify.sh --render`.
 
-Thin hook scripts are **bash → `verify.sh` only** (no Node in the adapter). Swap the implementation behind `verify.sh` later without changing Cursor wiring.
+Hooks default to **on**. Prefer narrowing matchers over `hooks.enable: false`. Optional MCP gating lives under `harness/render/cursor/optional/`.
+
+Thin hook scripts are **bash → `verify.sh` only** (no Node in the adapter).
 
 Details: [`harness/render/cursor/HOOKS.md`](harness/render/cursor/HOOKS.md).
 

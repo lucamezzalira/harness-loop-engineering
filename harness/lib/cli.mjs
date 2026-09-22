@@ -42,7 +42,7 @@ const ACTION_FLAGS = new Set([
 ]);
 
 function usage() {
-  return `verify.sh — harness for Node.js microservices
+  return `verify.sh — harness for Node projects
 
 Usage (flags select the action; configuration supplies every parameter; no flag takes a value):
 
@@ -210,11 +210,21 @@ async function main() {
         console.error(e.message);
         process.exit(2);
       }
+      const enforcement = config.hooks?.enable !== false ? 'on' : 'off';
+      console.log(`enforcement: ${enforcement}`);
+      console.log(`tool: ${config.tool} · profile: ${config.profile || 'default'}`);
+      console.log(`prd: ${config.loop?.prd || '(none)'}`);
+      console.log('');
       console.log(formatAssignmentBlock(config));
       console.log('');
       console.log(`treeHash: ${computeTreeHash(ROOT)}`);
       const report = readReport(ROOT);
-      if (report) console.log(`last report: ${report.status} tier=${report.tier}`);
+      if (report) {
+        console.log(
+          `last report: ${report.status} tier=${report.tier}` +
+            (report.hasWarnings ? ' hasWarnings' : ''),
+        );
+      }
       const session = path.join(ROOT, 'harness', 'state', 'session.json');
       if (fs.existsSync(session)) {
         console.log(

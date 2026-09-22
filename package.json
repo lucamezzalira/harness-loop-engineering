@@ -4,7 +4,7 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "Standalone harness for Node.js microservices coding agents",
+  "description": "Standalone harness for Node projects coding agents",
   "bin": {
     "harness-verify": "./verify.sh"
   },
@@ -13,7 +13,7 @@
   },
   "scripts": {
     "verify": "./verify.sh",
-    "test": "node --test harness/lib/severity.test.mjs harness/lib/panel/dispatch.test.mjs harness/lib/enforce/pre_tool.test.mjs harness/lib/hooks/fixtures.test.mjs"
+    "test": "node --test $(find harness/lib -name '*.test.mjs' | sort)"
   },
   "dependencies": {
     "yaml": "^2.7.0"

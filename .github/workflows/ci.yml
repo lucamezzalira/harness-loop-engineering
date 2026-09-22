@@ -13,6 +13,10 @@ jobs:
           node-version: '24'
           package-manager-cache: false
       - run: npm install
+      - name: Install gitleaks
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz | tar -xz gitleaks
+          sudo mv gitleaks /usr/local/bin/
       - name: Unit tests
         run: npm test
       - name: Hook fail-open
@@ -24,14 +28,22 @@ jobs:
         run: |
           rm -f harness.local.yaml
           ./verify.sh --render && exit 1 || test $? -eq 2
-      - name: Render copies thin hooks
+      - name: Render wires portable four (hooks on)
         run: |
-          printf '%s\n' 'tool: cursor' 'profile: default' 'hooks:' '  enable: false' '  failClosed: false' > harness.local.yaml
+          printf '%s\n' 'tool: cursor' 'profile: default' 'hooks:' '  enable: true' '  failClosed: false' > harness.local.yaml
           ./verify.sh --render
           test -f .cursor/hooks/before-shell.sh
           test -f .cursor/hooks.json
-          grep -q '"hooks": {}' .cursor/hooks.json || grep -q '"hooks":{}' .cursor/hooks.json
+          grep -q sessionStart .cursor/hooks.json
+          grep -q beforeShellExecution .cursor/hooks.json
+          grep -q afterFileEdit .cursor/hooks.json
+          grep -q '"stop"' .cursor/hooks.json
+          ! grep -q beforeMCPExecution .cursor/hooks.json
           ! test -f .cursor/hooks/before-shell.mjs
+          ! test -f .cursor/hooks/before-mcp.sh
+      - name: Status shows enforcement on
+        run: |
+          ./verify.sh --status | head -3 | grep -q 'enforcement: on'
       - name: Example estate tests
         run: |
           cd examples/two-services
@@ -45,8 +57,16 @@ jobs:
         run: |
           ./verify.sh --edit --turn && exit 1 || test $? -eq 2
           ./verify.sh --nope && exit 1 || test $? -eq 2
-      - name: Edit tier with gitleaks available
+      - name: Edit tier
+        run: ./verify.sh --edit || true
+      - name: Turn tier
+        run: ./verify.sh --turn
+      - name: Commit tier
+        run: ./verify.sh
+      - name: Agent commit refused via hook
         run: |
-          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz | tar -xz gitleaks
-          sudo mv gitleaks /usr/local/bin/
-          ./verify.sh --edit || true
+          set +e
+          echo '{"command":"git commit -m x"}' | bash .cursor/hooks/before-shell.sh >/dev/null
+          code=$?
+          set -e
+          test "$code" -eq 2
