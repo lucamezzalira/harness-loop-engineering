@@ -113,6 +113,155 @@ See `harness/roles/README.md` for why those tiers exist.
 
 `HARNESS_IN_HOOK=1` stops infinite recursion when a hook calls `verify.sh`.
 
+## Entry point: `verify.sh`
+
+Everything goes through one executable. Flags pick the action; `harness.yaml` / `harness.local.yaml` supply the parameters. Two action flags together exit `2`.
+
+```mermaid
+flowchart TB
+  V["./verify.sh"]
+
+  subgraph checks [Check tiers]
+    DEF["no flag → commit tier"]
+    EDIT["--edit"]
+    TURN["--turn"]
+  end
+
+  subgraph planloop [Plan and run]
+    PLAN["--plan"]
+    LOOP["--loop"]
+    RESUME["--resume"]
+  end
+
+  subgraph setup [Setup]
+    INSTALL["--install"]
+    RENDER["--render"]
+    RCHECK["--render --check"]
+  end
+
+  subgraph inspect [Inspect]
+    STATUS["--status"]
+    REPORT["--report"]
+    BACKLOG["--backlog"]
+  end
+
+  subgraph runtime [Host wiring]
+    HOOK["--hook"]
+  end
+
+  subgraph meta [Meta]
+    HELP["-h / --help"]
+    VER["-v / --version"]
+  end
+
+  V --> checks
+  V --> planloop
+  V --> setup
+  V --> inspect
+  V --> runtime
+  V --> meta
+
+  DEF --> R["harness/state/report.json"]
+  EDIT --> R
+  TURN --> R
+  PLAN --> P["harness/state/plan.json"]
+  LOOP --> P
+  RESUME --> P
+  INSTALL --> LOCAL["harness.local.yaml + baselines"]
+  RENDER --> ADAPTER[".cursor / .claude / .codex"]
+  RCHECK --> ADAPTER
+  HOOK --> MOMENTS["session / edit / stop / pre-tool"]
+```
+
+| Group | What it is for |
+| ----- | -------------- |
+| Check tiers | How green is the tree right now (edit is fast, turn is fuller, commit is everything) |
+| Plan and run | Decompose a PRD, drive unit-by-unit work, or continue after a pause |
+| Setup | First-time wiring and regenerating the tool adapter |
+| Inspect | Config, cost, and P2/P3 backlog without changing the tree |
+| Host wiring | Called only by Cursor/Claude/Codex hooks and git pre-commit |
+| Meta | Usage and version |
+
+### In action (the full system)
+
+The flags above are the API. In a live session they are not called as a random menu. The host tool (Cursor / Claude / Codex) does the editing; hooks call `./verify.sh --hook` at fixed moments; that process runs the right check tier, may invoke the review panel, and writes `harness/state/report.json`. Guides (`AGENTS.md`, skills) tell the agent when to run `--turn` / `--plan` / `--loop` by hand. Setup (`--install`, `--render`) happens once per machine or when roles change.
+
+```mermaid
+sequenceDiagram
+  actor Dev as Developer
+  participant Host as Cursor / Claude / Codex
+  participant Hooks as Adapter hooks
+  participant V as ./verify.sh
+  participant Sensors as sensors/*.sh
+  participant Panel as Review panel
+  participant State as harness/state
+
+  Note over Dev,State: Once per repo / machine
+  Dev->>V: --install then --render
+  V->>Host: writes .cursor or .claude adapter
+
+  Note over Dev,State: Every coding session (turn mode)
+  Dev->>Host: prompt
+  Host->>Hooks: sessionStart
+  Hooks->>V: --hook
+  V->>State: orientation (no refuse)
+
+  loop Each edit
+    Host->>Host: edit files
+    Host->>Hooks: afterFileEdit
+    Hooks->>V: --hook → edit tier
+    V->>Sensors: format, lint, context-budget
+    Sensors-->>V: exit 0/1/3
+    V->>State: report.json (non-blocking)
+  end
+
+  Host->>Hooks: stop (agent wants to finish)
+  Hooks->>V: --hook → turn tier
+  V->>Sensors: secrets, unit, env, boundaries, …
+  Sensors-->>V: exit 0/1/2/3
+  V->>Panel: reviewer (and others by cadence)
+  Panel-->>V: categories → P0–P3
+  V->>State: report.json + review.md
+  alt blocking fail or P0/P1
+    V-->>Host: refuse finish / follow-up
+    Host-->>Dev: agent keeps fixing
+  else green
+    V-->>Host: allow stop
+  end
+
+  Dev->>Host: explicit "commit"
+  Host->>Hooks: beforeShell (git commit)
+  Hooks->>V: --hook ship gate
+  alt no instruction or report not green
+    V-->>Host: deny (exit 2)
+  else ok
+    V-->>Host: allow
+  end
+```
+
+What each layer does when that sequence runs:
+
+1. **Guides** (`AGENTS.md`, `harness/skills/`) shape what the agent tries. They do not enforce.
+2. **Hooks** fire on moments. They only `exec ./verify.sh --hook` with `HARNESS_HOOK_MOMENT` set. You rarely type `--hook` yourself.
+3. **Sensors** (`harness/sensors/checks/*.sh`) are one tool each. They report facts via exit codes. `sensors.yaml` decides skip / warn / fail / harness-error.
+4. **`report.json`** is the shared scoreboard. Stop, pre-commit, and CI all read the same file and tree hash.
+5. **Review panel** is a separate model call (host CLI, then API fallback). It returns categories; `harness.yaml` maps them to P0–P3. It is not the chat thread.
+6. **Ship gate** is independent of how green the checks are: without your explicit instruction in the session, commit / push / PR / deploy stay refused.
+
+Plan/loop is the same machinery on a timer. `--plan` writes `plan.json` from the PRD; `--loop` repeatedly: implement unit → turn tier → panel → next unit, until definition of done or a budget brake. Work is left staged. You still own the ship gate.
+
+```mermaid
+flowchart LR
+  PRD["specs/.../PRD.md"] -->|--plan| Plan["plan.json"]
+  Plan -->|--loop| Unit["implement unit"]
+  Unit --> Turn["turn tier + panel"]
+  Turn -->|fail| Unit
+  Turn -->|pass| Next["next unit / wave"]
+  Next --> Turn
+  Next -->|done| Staged["staged, not committed"]
+  Staged -->|your explicit yes| Ship["commit / push / PR"]
+```
+
 ## Commands
 
 | Command                        | What it does                                                                                     | When to use it                                                         |
@@ -187,11 +336,11 @@ examples/two-services/    # deletable demo estate
 | `verify.sh` | Single entry point for tiers, plan/loop, install, render, and hooks |
 | `AGENTS.md` / `CLAUDE.md` | Standing instructions for the coding agent (`CLAUDE.md` points at `AGENTS.md`) |
 | `HANDOFF.md` | Short session notes the next agent (or human) reads first |
-| `harness.yaml` | Shared, committed behaviour: roles, severity, baselines, hooks default |
+| `harness.yaml` | Shared, committed behaviour: project, roles, severity, limits, baselines |
 | `harness.local.yaml` | Per-machine tool and profile; never committed |
 | `harness/models.yaml` | Provider and model IDs only; roles pick tiers, not model strings |
 | `harness/roles/` | Reviewer / planner / security prompts rendered into the tool adapter |
-| `harness/rules/` | Standing constraints copied into agent context |
+| `harness/render/rules/` | Standing constraints (Cursor-shaped); rendered into the tool adapter |
 | `harness/skills/` | Step-by-step playbooks (ADR, PRD, session start) linked into `.cursor` / `.claude` |
 | `harness/sensors/` | Registry (`sensors.yaml`), thin shell checks, and failure guidance |
 | `harness/enforce/` | Ship gate, pre-tool refuse, stop/edit hook logic |

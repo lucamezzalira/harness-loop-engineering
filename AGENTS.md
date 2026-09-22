@@ -1,42 +1,51 @@
-# AGENTS.md
+# Harness and Loop Engineering
 
-## Commands
+Reference implementation for a Node harness that renders for Claude, Cursor and Codex.
+JavaScript (ESM) on Node 20+, npm.
 
-- `./verify.sh` — commit-tier checks (default)
-- `./verify.sh --edit` — edit tier on the file just changed
-- `./verify.sh --turn` — turn tier
-- `./verify.sh --plan` / `--loop` / `--resume` — plan and run
-- `node --test harness/lib/**/*.test.mjs` — harness unit tests
-- `cd examples/two-services && npm test` — example estate tests
+## Setup commands
+- Install: `npm install`
+- Test: `npm test`
+- Test one file: `node --test path/to/file.test.mjs`
+- Verify (the harness itself): `./verify.sh`
+- Plan / loop: `./verify.sh --plan` then `./verify.sh --loop`
 
-## Testing
+## What done means
+A change is done when `./verify.sh` exits 0. That means the panel of
+review roles has run at the tier the change requires, no P0 or P1
+findings remain open, and the ship gate still requires an explicit
+developer instruction before commit, push, PR, or deploy. A change that
+only compiles is not done.
 
-Mock I/O at the edges. Prefer `node:test`. Do not mock the unit under test.
+## Project structure
+- `harness/` the harness itself; keep it visible, not hidden under a dot
+- `harness/sensors/checks/` thin shell sensors (exit 0/1/2/3; registry owns missing)
+- `harness/roles/` the review roles
+- `harness/render/rules/` standing constraints (template + rule-shape sensor)
+- `harness/state/` gitignored session and cost state
+- `docs/adr/` architecture decisions, indexed at docs/adr/README.md
+- `specs/` per-feature PRDs and acceptance.json
+- `.claude/`, `.cursor/`, `.codex/` rendered from harness/render/
 
-## Structure
+## Architecture
+The standing decisions live in `docs/adr/`. Read `docs/adr/README.md`
+first to find the ADRs whose `touches` field matches the paths you are
+about to change, then read those ADRs in full before making the change.
+The short version, for tasks that do not touch architectural boundaries:
 
-- `harness/` — editable harness (roles, rules, skills, sensors)
-- `harness/state/` — machine output (gitignored)
-- `examples/two-services/` — runnable estate for trying checks
+- Verify.sh is the sole entry point; flags select action, never carry
+  configuration
+- Exit codes are three-valued at the CLI: 0 pass, 1 code wrong, 2 harness wrong
+  (sensors may also return 3 for missing tool; sensors.yaml maps that)
+- Roles return a `category` from a closed list, and harness.yaml maps
+  category to severity
 
-## Style
-
-Follow eslint. No style rules here that the linter already enforces.
-
-## Git workflow
-
-The agent must not commit, push, open a PR, or deploy without an explicit developer instruction in the current session.
+For anything beyond these lines the ADR is the source of truth.
 
 ## Boundaries
-
-- Always do: read, lint, run unit tests on a touched file.
-- Ask first: add a dependency, change the lockfile, write a migration, publish a new event type, change a public route.
-- Never touch: production config, credentials, configured infra paths.
-
-<!-- harness-loop-engineering -->
-
-## Harness
-
-Run `./verify.sh` (edit/turn/commit tiers via flags). Exit codes: 0 pass, 1 fix code, 2 fix harness (never retry 2 as if code is wrong).
-Nothing ships (commit/push/PR/deploy) without an explicit developer instruction in the session.
-<!-- /harness-loop-engineering -->
+- Never edit files under `harness/state/`, it is regenerated per session
+- Never modify an ADR whose status is `accepted`; supersede with a new
+  ADR instead
+- Never install a new production dependency without an ADR
+- Never render for more than one tool in a single run; the single-target
+  rule is load-bearing

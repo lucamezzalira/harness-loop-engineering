@@ -83,7 +83,7 @@ export function promoteRecurring(root, config) {
       proposed.push({
         category: cat,
         units,
-        suggestion: `Recurring category "${cat}" across ${units.length} units. Consider a guide/rule in harness/rules/.`,
+        suggestion: `Recurring category "${cat}" across ${units.length} units. Consider a guide/rule in harness/render/rules/.`,
       });
     }
   }

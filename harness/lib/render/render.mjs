@@ -82,6 +82,8 @@ export async function renderAdapter(root, config, { checkOnly = false } = {}) {
     ensureClaudeMd(root);
   }
 
+  renderRules(root, dir, tool);
+
   const skillsSrc = path.join(root, 'harness', 'skills');
   const skillsDst = path.join(dir, 'skills');
   linkSkills(skillsSrc, skillsDst);
@@ -268,6 +270,24 @@ function ensureClaudeMd(root) {
   const cur = fs.readFileSync(p, 'utf8');
   if (cur.startsWith('@AGENTS.md')) return;
   fs.writeFileSync(p, '@AGENTS.md\n' + cur);
+}
+
+function renderRules(root, toolDir, tool) {
+  const srcDir = path.join(root, 'harness', 'render', 'rules');
+  if (!fs.existsSync(srcDir)) return;
+  const rulesDir = path.join(toolDir, 'rules');
+  fs.mkdirSync(rulesDir, { recursive: true });
+  const ext = tool === 'cursor' ? '.mdc' : '.md';
+
+  for (const name of fs.readdirSync(srcDir).sort()) {
+    if (!name.endsWith('.md')) continue;
+    if (name === 'TEMPLATE.md') continue;
+    const src = path.join(srcDir, name);
+    if (!fs.statSync(src).isFile()) continue;
+    const body = fs.readFileSync(src, 'utf8');
+    const base = name.replace(/\.md$/i, '');
+    fs.writeFileSync(path.join(rulesDir, `${base}${ext}`), body.endsWith('\n') ? body : `${body}\n`);
+  }
 }
 
 function renderRoleForTool(tool, role, roleSrc, binding) {

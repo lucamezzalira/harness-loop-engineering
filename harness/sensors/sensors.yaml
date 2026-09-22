@@ -76,6 +76,30 @@ sensors:
     enabled: true
     missing: n/a
 
+  - name: adr-frontmatter
+    tier: turn
+    blocking: true
+    enabled: true
+    missing: n/a
+
+  - name: adr-index
+    tier: turn
+    blocking: true
+    enabled: true
+    missing: n/a
+
+  - name: diff-scope
+    tier: turn
+    blocking: true
+    enabled: true
+    missing: n/a
+
+  - name: rule-shape
+    tier: turn
+    blocking: true
+    enabled: true
+    missing: n/a
+
   - name: deadcode
     tier: turn
     blocking: false

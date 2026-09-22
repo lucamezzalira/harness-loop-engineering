@@ -31,14 +31,15 @@ export async function runInstall(root) {
   const nextHarness = {
     ...existing,
     project: {
-      packageManager: detection.packageManager,
-      moduleSystem: detection.moduleSystem,
+      ...(existing.project || {}),
       servicesGlob: detection.servicesGlob,
-      contractsPackage: detection.contractsPackage,
-      infraPaths: existing.project?.infraPaths || ['infra/**'],
+      contractsPackage: detection.contractsPackage ?? existing.project?.contractsPackage ?? null,
+      infraPaths: existing.project?.infraPaths || ['infra/**', 'terraform/**'],
     },
     baseline: { ...baseline, ...(existing.baseline || {}) },
   };
+  delete nextHarness.project.packageManager;
+  delete nextHarness.project.moduleSystem;
   // Only write if changed (idempotent)
   const serialized = stringifyYaml(nextHarness) + '\n';
   if (!fs.existsSync(harnessPath) || fs.readFileSync(harnessPath, 'utf8') !== serialized) {
@@ -232,6 +233,13 @@ function practiceAudit(root, detection) {
 }
 
 function ensureAgentsBlock(root) {
+  const p = path.join(root, 'AGENTS.md');
+  if (fs.existsSync(p)) {
+    const cur = fs.readFileSync(p, 'utf8');
+    if (cur.includes('## What done means') || cur.includes('<!-- harness-loop-engineering -->')) {
+      return;
+    }
+  }
   const marker = '<!-- harness-loop-engineering -->';
   const block = [
     marker,
@@ -242,42 +250,32 @@ function ensureAgentsBlock(root) {
     '<!-- /harness-loop-engineering -->',
     '',
   ].join('\n');
-  const p = path.join(root, 'AGENTS.md');
   if (!fs.existsSync(p)) {
     fs.writeFileSync(
       p,
       [
-        '# AGENTS.md',
+        '# Harness and Loop Engineering',
         '',
-        '## Commands',
+        '## Setup commands',
         '',
-        '- `./verify.sh` — default commit-tier checks',
-        '- `./verify.sh --edit` — edit tier on changed files',
-        '- `./verify.sh --turn` — turn tier',
+        '- Verify: `./verify.sh`',
         '',
-        '## Testing',
+        '## What done means',
         '',
-        'Prefer the repository test script. Mock I/O at the edges; do not mock the unit under test.',
+        'A change is done when `./verify.sh` exits 0.',
         '',
-        '## Structure',
+        '## Project structure',
         '',
-        'See `harness/rules/` and service-local AGENTS.md (nearest wins).',
+        '- `harness/` the harness itself',
         '',
-        '## Style',
+        '## Architecture',
         '',
-        'Only deltas from Node defaults; linter is source of truth.',
-        '',
-        '## Git workflow',
-        '',
-        'Agent may not commit, push, open a PR, or deploy without an explicit instruction.',
+        'Standing decisions live in `docs/adr/`.',
         '',
         '## Boundaries',
         '',
-        '- Always do: read, lint, unit-test the file you touch.',
-        '- Ask first: add dependency, change lockfile, migration, new event type, public route.',
-        '- Never touch: production config, credentials, configured infra paths.',
+        '- Never edit `harness/state/`',
         '',
-        block,
       ].join('\n'),
     );
     return;

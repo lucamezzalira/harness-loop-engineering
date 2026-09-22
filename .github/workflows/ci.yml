@@ -30,7 +30,7 @@ jobs:
           ./verify.sh --render && exit 1 || test $? -eq 2
       - name: Render wires portable four (hooks on)
         run: |
-          printf '%s\n' 'tool: cursor' 'profile: default' 'hooks:' '  enable: true' '  failClosed: false' > harness.local.yaml
+          cp harness.local.yaml.example harness.local.yaml
           ./verify.sh --render
           test -f .cursor/hooks/before-shell.sh
           test -f .cursor/hooks.json

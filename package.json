@@ -13,7 +13,8 @@
   },
   "scripts": {
     "verify": "./verify.sh",
-    "test": "node --test $(find harness/lib -name '*.test.mjs' | sort)"
+    "test": "node --test $(find harness/lib -name '*.test.mjs' | sort)",
+    "adr:index": "node scripts/build-adr-index.mjs"
   },
   "dependencies": {
     "yaml": "^2.7.0"

@@ -11,6 +11,17 @@ test('unknown category maps to default', () => {
   assert.equal(mapCategory('totally-new', map), 'P2');
 });
 
+test('nested severity.categories shape normalizes', () => {
+  const r = validateSeverityMap({
+    categories: { 'secret-exposed': 'P0', naming: 'P3' },
+    default: 'P2',
+  });
+  assert.equal(r.ok, true);
+  assert.equal(r.map['secret-exposed'], 'P0');
+  assert.equal(mapCategory('naming', r.map), 'P3');
+  assert.equal(mapCategory('unknown', r.map), 'P2');
+});
+
 test('dedupe keeps higher mapped severity', () => {
   const map = { default: 'P2', naming: 'P3', 'error-swallowed': 'P1' };
   const merged = mergeFindings(

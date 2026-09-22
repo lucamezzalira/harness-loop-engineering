@@ -3,8 +3,20 @@ tool: cursor
 profile: default
 confirmProfile: true
 
-# Hooks default on in harness.yaml. Override here only if you must disable.
+# Hooks default on in harness.yaml defaults. Override here only if you must disable.
 # failClosed applies to beforeShell (and optional beforeMCP) when true.
 hooks:
   enable: true
   failClosed: false
+
+# Demo-repo only: bounded contexts for the diff-scope sensor, and the loop PRD.
+# Keep these out of harness.yaml so the shared file stays portable.
+contexts:
+  - examples/two-services/services/orders
+  - examples/two-services/services/billing
+
+loop:
+  prd: specs/example-idempotent-consumers/PRD.md
+  maxTurns: 20
+  maxSeconds: 1800
+  maxCostUsd: 5.0

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import { DEFAULT_SEVERITY_MAP, validateSeverityMap } from './severity.mjs';
+import { DEFAULT_SEVERITY_CATEGORIES, validateSeverityMap } from './severity.mjs';
 
 export const VALID_TOOLS = Object.freeze(['claude', 'cursor', 'codex']);
 
@@ -36,7 +36,10 @@ export const DEFAULTS = Object.freeze({
       product: ['specs/**'],
     },
   },
-  severity: { ...DEFAULT_SEVERITY_MAP },
+  severity: {
+    categories: { ...DEFAULT_SEVERITY_CATEGORIES },
+    default: 'P2',
+  },
   backlog: {
     maxItems: 50,
     expireP3Sessions: 3,
@@ -59,8 +62,9 @@ export const DEFAULTS = Object.freeze({
   },
   limits: {
     agentsMdLines: 200,
-    skillBodyLines: 60,
+    skillBodyLines: 500,
   },
+  contexts: [],
   hooks: {
     enable: true,
     failClosed: false,

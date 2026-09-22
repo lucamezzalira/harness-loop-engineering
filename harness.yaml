@@ -1,78 +1,95 @@
+# harness.yaml
+#
+# What the harness does in this repo. Read by verify.sh on every run.
+# Local overrides go in harness.local.yaml (gitignored); do not put them here.
+# Sensor definitions live in harness/sensors/sensors.yaml, not here, because
+# a sensor's tier, blocking status and missing-tool policy is a check-level
+# fact rather than a repo-level one.
+
+# The repo the harness is running against.
+# Only fields the harness cannot infer belong here.
 project:
-  packageManager: npm
-  moduleSystem: esm
-  servicesGlob: 'services/*'
-  contractsPackage: '@acme/contracts'
-  infraPaths: ['infra/**']
+  contractsPackage: '@acme/contracts'      # the package agents must not import from outside
+  servicesGlob: 'services/*'               # what counts as a service for boundary checks
+  infraPaths:                              # paths the infra role owns
+    - 'infra/**'
+    - 'terraform/**'
 
+# Which review roles run, and when.
+# A disabled role never runs; enable it when the codebase grows to need it.
 roles:
-  reviewer: { enabled: true }
-  test-writer: { enabled: true }
-  security: { enabled: true }
-  product: { enabled: true }
-  planner: { enabled: true }
-  qa: { enabled: false }
-  infra: { enabled: false }
+  reviewer:     { enabled: true }          # code review, always on
+  planner:      { enabled: true }          # decomposes work into units
+  security:     { enabled: true }          # security review
+  product:      { enabled: true }          # spec conformance
+  test-writer:  { enabled: true }          # test authoring
+  qa:           { enabled: false }         # separate qa role, off until qa team exists
+  infra:        { enabled: false }         # off until infra/ is populated
 
+# When each role runs during a session.
+# turn = after every agent turn; unit = after a unit of work completes.
+# Path triggers add a role temporarily when a matching file changed.
 review:
-  maxCycles: 3
-  blockAt: [P0, P1]
-  requireGreen: true
+  maxCycles: 3                              # loops before the panel escalates
+  blockAt: [P0, P1]                         # severities that halt the session
+  requireGreen: true                        # a session cannot end with any P0/P1 open
   cadence:
-    turn: [reviewer]
-    unit: [reviewer, security, product, qa]
-  triggers:
+    turn: [reviewer]                        # just the reviewer on every turn
+    unit: [reviewer, security, product, qa] # the full panel at unit boundaries
+  triggers:                                 # extra roles when files match
     security: ['services/**/auth/**', '**/log*.js', '**/*secret*']
-    infra: ['infra/**', 'terraform/**']
-    product: ['specs/**']
+    infra:    ['infra/**', 'terraform/**']
+    product:  ['specs/**']
 
+# How role findings map to severity.
+# The role returns a category from a closed list; this table decides how
+# serious each category is. Keep the default outside the map to avoid
+# iteration bugs.
 severity:
-  secret-exposed: P0
-  pii-in-logs: P0
-  boundary-violation: P0
-  contract-breaking: P0
-  acceptance-unmet: P1
-  missing-idempotency: P1
-  error-swallowed: P1
-  duplication: P2
-  naming: P3
-  style: P3
-  default: P2
+  categories:
+    secret-exposed:      P0
+    pii-in-logs:         P0
+    boundary-violation:  P0
+    contract-breaking:   P0
+    acceptance-unmet:    P1
+    missing-idempotency: P1
+    error-swallowed:     P1
+    duplication:         P2
+    naming:              P3
+    style:               P3
+  default: P2                               # any category not in the map above
 
+# Backlog behaviour for P2 and P3 findings that did not block.
 backlog:
-  maxItems: 50
-  expireP3Sessions: 3
-  promoteAfterUnits: 3
+  maxItems: 50                              # cap; oldest expire first
+  expireP3Sessions: 3                       # P3 items drop after N sessions
+  promoteAfterUnits: 3                      # recurring category → proposed rule
 
+# Baseline metrics the harness ratchets against.
+# null means "record on next run and use that as the baseline going forward".
+# The ratchet prevents regressions without demanding a target upfront.
 baseline:
-  agentsMdLines: null
+  agentsMdLines:    null
   duplicatedBlocks: null
-  maxComplexity: null
+  maxComplexity:    null
 
+# Runtime behaviour of verify.sh itself.
 verify:
-  failFast: true
-  maxStopRetries: 2
-  editBudgetMs: 1000
+  failFast: true                            # stop on first P0/P1 finding
+  maxStopRetries: 2                         # attempts before giving up on a stuck run
+  editBudgetMs: 1000                        # debounce for edit-tier runs, in milliseconds
 
+# What gets logged and where.
+# Off by default because logs are per-session state, not repo state.
 logs:
   enabled: false
-  level: events
-  retainSessions: 10
+  level: events                             # events | debug | trace
+  retainSessions: 10                        # oldest sessions expire after N runs
 
+# Hard limits enforced by the harness.
+# The AGENTS.md limit is Anthropic's own recommendation (200 lines).
+# The skill body limit is Anthropic's stated best practice (500 lines,
+# under 5,000 tokens); the 60-line figure that circulates online is wrong.
 limits:
-  agentsMdLines: 200
-  skillBodyLines: 60
-
-# Enforcement layer. If you set enable: false, agents can ship without hooks
-# refusing commits / running edit-tier checks. Prefer narrowing matchers over
-# turning this off. Recover a wedged Cursor adapter with:
-#   echo '{"version":1,"hooks":{}}' > .cursor/hooks.json
-hooks:
-  enable: true
-  failClosed: false
-
-loop:
-  prd: specs/example-idempotent-consumers/PRD.md
-  maxTurns: 20
-  maxSeconds: 1800
-  maxCostUsd: 5.0
+  agentsMdLines:   200                      # per Anthropic's Claude Code memory docs
+  skillBodyLines:  500                      # per Anthropic's Skill authoring best practices
