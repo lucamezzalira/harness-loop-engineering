@@ -13,6 +13,9 @@ test('--plan against example PRD produces multi-unit plan.json (fake provider)',
   process.env.HARNESS_FAKE_PROVIDER = '1';
   try {
     const config = loadConfig(ROOT);
+    // CI runs unit tests before writing harness.local.yaml; requireTool needs this.
+    config.tool = config.tool || 'cursor';
+    config.profile = config.profile || 'default';
     config.confirmProfile = false;
     config.loop = {
       ...config.loop,
