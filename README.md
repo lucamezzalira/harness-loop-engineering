@@ -182,6 +182,25 @@ docs/adr/
 examples/two-services/    # deletable demo estate
 ```
 
+| Path | Role |
+| ---- | ---- |
+| `verify.sh` | Single entry point for tiers, plan/loop, install, render, and hooks |
+| `AGENTS.md` / `CLAUDE.md` | Standing instructions for the coding agent (`CLAUDE.md` points at `AGENTS.md`) |
+| `HANDOFF.md` | Short session notes the next agent (or human) reads first |
+| `harness.yaml` | Shared, committed behaviour: roles, severity, baselines, hooks default |
+| `harness.local.yaml` | Per-machine tool and profile; never committed |
+| `harness/models.yaml` | Provider and model IDs only; roles pick tiers, not model strings |
+| `harness/roles/` | Reviewer / planner / security prompts rendered into the tool adapter |
+| `harness/rules/` | Standing constraints copied into agent context |
+| `harness/skills/` | Step-by-step playbooks (ADR, PRD, session start) linked into `.cursor` / `.claude` |
+| `harness/sensors/` | Registry (`sensors.yaml`), thin shell checks, and failure guidance |
+| `harness/enforce/` | Ship gate, pre-tool refuse, stop/edit hook logic |
+| `harness/render/` | Tool adapters (Cursor / Claude / Codex templates and hook scripts) |
+| `harness/state/` | Machine output: `report.json`, plan, session, backlog (gitignored) |
+| `specs/<slug>/` | PRD plus `acceptance.json` for a piece of work |
+| `docs/adr/` | Architecture decisions that outlive a unit |
+| `examples/two-services/` | Optional demo monorepo to try boundaries and checks |
+
 ## Review panel
 
 At turn end: turn-tier checks + **reviewer** only (cheap).
