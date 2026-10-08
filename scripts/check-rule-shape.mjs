@@ -57,13 +57,24 @@ function globsNonEmpty(globs) {
 }
 
 function sectionBody(body, heading) {
-  const re = new RegExp(`^## ${heading}\\s*$`, 'im');
-  const m = body.match(re);
-  if (!m) return null;
-  const start = m.index + m[0].length;
-  const rest = body.slice(start);
-  const next = rest.search(/^##\s+/m);
-  return (next < 0 ? rest : rest.slice(0, next)).trim();
+  const lines = body.split('\n');
+  const target = `## ${heading}`.toLowerCase();
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].trim().toLowerCase() === target) {
+      start = i + 1;
+      break;
+    }
+  }
+  if (start < 0) return null;
+  let end = lines.length;
+  for (let i = start; i < lines.length; i++) {
+    if (/^##\s+/.test(lines[i])) {
+      end = i;
+      break;
+    }
+  }
+  return lines.slice(start, end).join('\n').trim();
 }
 
 function countBullets(text) {

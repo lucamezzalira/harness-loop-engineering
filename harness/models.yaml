@@ -15,9 +15,10 @@ tiers:
   fast:
     provider: anthropic
     id: claude-haiku-4-5-20251001
+  # Pin local Ollama tags in harness.local.yaml if you override these.
   local-deep:
     provider: local
-    id: qwen3-coder:30b
+    id: qwen3.6:27b
   local-fast:
     provider: local
     id: qwen3:8b
@@ -32,6 +33,18 @@ profiles:
     test-writer: balanced
     qa: fast
   offline:
+    planner: local-deep
+    reviewer: local-deep
+    security: local-deep
+    product: local-deep
+    infra: local-fast
+    test-writer: local-fast
+    qa: local-fast
+  # Local panels + host-tool implementers. Switch via harness.local.yaml `profile:`.
+  # Requires Ollama at localhost:11434 with the local-deep / local-fast tags above.
+  # Keep edit-capable roles on a host tool (Cursor Auto / Claude CLI) so they can
+  # write the tree; local models review only.
+  hybrid-local:
     planner: local-deep
     reviewer: local-deep
     security: local-deep

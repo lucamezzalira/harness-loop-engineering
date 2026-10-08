@@ -9,38 +9,60 @@ import { minimatchLike } from '../util/glob.mjs';
 
 /**
  * @param {object} opts
- * @param {'turn'|'unit'} opts.cadence
+ * @param {'turn'|'unit'|'wave'|'ship'} opts.cadence
  * @param {string[]} opts.diffFiles
  * @param {boolean} opts.unitComplete
  * @param {boolean} opts.acceptanceChanged
  */
 export function selectRoles(config, opts) {
-  const cadenceList = config.review?.cadence?.[opts.cadence] || ['reviewer'];
+  const cadence = opts.cadence || 'turn';
+  const cadenceList =
+    config.review?.cadence?.[cadence] ||
+    (cadence === 'ship' || cadence === 'wave'
+      ? config.review?.cadence?.unit || ['reviewer']
+      : ['reviewer']);
   const roles = [];
   for (const name of cadenceList) {
     if (config.roles?.[name]?.enabled === false) continue;
     if (!roleTriggered(config, name, opts)) continue;
     roles.push(name);
   }
-  // reviewer always if listed
   return roles;
 }
 
 function roleTriggered(config, name, opts) {
   const triggers = config.review?.triggers || {};
+  const pathTriggered = (key, fallback = []) => {
+    const patterns = triggers[key] || fallback;
+    if (!patterns.length) return false;
+    return opts.diffFiles.some((f) => patterns.some((p) => minimatchLike(f, p)));
+  };
+
   if (name === 'security') {
-    const patterns = triggers.security || [];
-    return opts.diffFiles.some((f) => patterns.some((p) => minimatchLike(f, p)));
+    // Always on unit complete / unit cadence.
+    if (opts.unitComplete || opts.cadence === 'unit') return true;
+    return pathTriggered('security');
   }
-  if (name === 'infra') {
-    const patterns = triggers.infra || [];
-    return opts.diffFiles.some((f) => patterns.some((p) => minimatchLike(f, p)));
+  if (name === 'infra') return pathTriggered('infra');
+  if (name === 'performance') {
+    return pathTriggered('performance', [
+      'services/**',
+      'examples/**',
+      '**/webpack*.{js,cjs,mjs,ts}',
+    ]);
   }
   if (name === 'product') {
     if (opts.unitComplete) return true;
     if (opts.acceptanceChanged) return true;
-    const patterns = triggers.product || ['specs/**'];
-    return opts.diffFiles.some((f) => patterns.some((p) => minimatchLike(f, p)));
+    return pathTriggered('product', ['specs/**']);
+  }
+  if (name === 'qa') {
+    return (
+      opts.unitComplete ||
+      opts.cadence === 'wave' ||
+      opts.cadence === 'ship' ||
+      opts.cadence === 'unit'
+    );
   }
   return true;
 }
@@ -109,7 +131,6 @@ export async function runPanel(root, config, opts = {}) {
 
 function listDiffFiles(root, sinceHash) {
   const args = sinceHash ? ['diff', '--name-only', sinceHash] : ['diff', '--name-only', 'HEAD'];
-  // also include unstaged
   const a = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
   const b = spawnSync('git', ['diff', '--name-only'], { cwd: root, encoding: 'utf8' });
   const c = spawnSync('git', ['ls-files', '--others', '--exclude-standard'], {

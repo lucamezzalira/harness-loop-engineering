@@ -115,10 +115,20 @@ function rewriteField(text, field, value) {
   const fm = text.slice(0, end + 4);
   const body = text.slice(end + 4);
   const quoted = value === '' ? '""' : `"${value}"`;
-  const re = new RegExp(`^${field}:.*$`, 'm');
-  const nextFm = re.test(fm)
-    ? fm.replace(re, `${field}: ${quoted}`)
-    : fm.replace(/\n---\s*$/, `\n${field}: ${quoted}\n---\n`);
+  const prefix = `${field}:`;
+  const lines = fm.split('\n');
+  let found = false;
+  const nextLines = lines.map((line) => {
+    if (line.startsWith(prefix)) {
+      found = true;
+      return `${field}: ${quoted}`;
+    }
+    return line;
+  });
+  let nextFm = nextLines.join('\n');
+  if (!found) {
+    nextFm = nextFm.replace(/\n---\s*$/, `\n${field}: ${quoted}\n---\n`);
+  }
   return nextFm + body;
 }
 

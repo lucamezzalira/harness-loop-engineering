@@ -27,13 +27,17 @@ export const DEFAULTS = Object.freeze({
     blockAt: ['P0', 'P1'],
     requireGreen: true,
     cadence: {
+      // Mid-loop: fast. Unit end owns product/security. Wave/ship: specialists.
       turn: ['reviewer'],
-      unit: ['reviewer', 'security', 'product', 'qa'],
+      unit: ['security', 'product'],
+      wave: ['reviewer', 'security', 'product', 'qa'],
+      ship: ['reviewer', 'security', 'product', 'qa'],
     },
     triggers: {
       security: ['services/**/auth/**', '**/log*.js', '**/*secret*'],
       infra: ['infra/**', 'terraform/**'],
       product: ['specs/**'],
+      performance: ['services/**', 'examples/**', '**/webpack*.{js,cjs,mjs,ts}'],
     },
   },
   severity: {
@@ -76,6 +80,9 @@ export const DEFAULTS = Object.freeze({
     maxCostUsd: 5.0,
     gate: 'each-unit',
     stopOnIdenticalFailures: 2,
+    // Past estimatedTurns * factor (or estimatedTurns with no touch evidence), leave the unit.
+    unitStallFactor: 2,
+    unitStallGraceTurns: 0,
     confirmOnTreeDrift: true,
     splitIfTurnsExceed: 1.5,
   },

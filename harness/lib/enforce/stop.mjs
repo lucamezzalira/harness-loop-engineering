@@ -6,6 +6,12 @@ import { computeTreeHash } from '../tree-hash.mjs';
 import { appendHandoff } from '../plan/handoff.mjs';
 import { readSession, writeSession } from '../accounting.mjs';
 
+/** Turn-level panel retries; ignore legacy per-unit object stored on panelCycles. */
+export function turnPanelCycleCount(session) {
+  const pc = session?.panelCycles;
+  return typeof pc === 'number' ? pc : 0;
+}
+
 /**
  * Stop sequence (identical whether or not --loop is driving):
  * 1. turn tier; red → block (retry); 3rd attempt escalate
@@ -56,16 +62,18 @@ export async function stopSequence(root, config, opts = {}) {
 
   session.verifyRetries = 0;
 
-  // 2. panel if tree changed
+  // 2. panel if tree changed (skip turn panel once capped for this unit)
   const treeHash = report.treeHash || computeTreeHash(root);
   let panel = null;
-  if (treeHash !== session.lastReviewedHash) {
+  const unitId = opts.unitId;
+  const panelCapped = Boolean(unitId && session.turnPanelCapped?.[unitId]);
+  if (treeHash !== session.lastReviewedHash && !panelCapped) {
     if (config.review?.requireGreen !== false) {
       panel = await runPanel(root, config, {
         cadence: opts.cadence || 'turn',
         sinceHash: session.lastReviewedHash,
-        unitId: opts.unitId,
-        cycle: (session.panelCycles || 0) + 1,
+        unitId,
+        cycle: turnPanelCycleCount(session) + 1,
         unitComplete: opts.unitComplete,
         acceptanceChanged: opts.acceptanceChanged,
       });
@@ -73,10 +81,10 @@ export async function stopSequence(root, config, opts = {}) {
   }
 
   if (panel?.blocking?.length) {
-    session.panelCycles = (session.panelCycles || 0) + 1;
+    session.panelCycles = turnPanelCycleCount(session) + 1;
     writeSession(root, session);
     const maxCycles = config.review?.maxCycles ?? 3;
-    if (session.panelCycles <= maxCycles) {
+    if (turnPanelCycleCount(session) <= maxCycles) {
       return {
         allow: false,
         exitCode: 1,
@@ -86,10 +94,14 @@ export async function stopSequence(root, config, opts = {}) {
         message: panel.table,
       };
     }
-    // escalate with leftovers
+    // escalate with leftovers — do not re-run turn panel for this unit
+    if (unitId) {
+      session.turnPanelCapped = session.turnPanelCapped || {};
+      session.turnPanelCapped[unitId] = true;
+    }
     appendHandoff(root, {
       title: 'Panel cycle cap',
-      body: `Reached review.maxCycles=${maxCycles}. Remaining blocking findings surfaced:\n${panel.table}`,
+      body: `Reached review.maxCycles=${maxCycles}${unitId ? ` for ${unitId}` : ''}. Remaining blocking findings surfaced:\n${panel.table}\nTurn panel capped for this unit; stall/complete gates still apply.`,
     });
   }
 

@@ -5,6 +5,7 @@ import { invokeRole, loadRoleFile, probeProvider } from '../agents/invoke.mjs';
 import { confirmProfile, confirmSplit, isTTY } from '../tty.mjs';
 import { recordUsage, writeSession, readSession } from '../accounting.mjs';
 import { minimatchLike } from '../util/glob.mjs';
+import { normalizePlanAcceptance, validatePlan } from './validate-plan.mjs';
 
 /**
  * ./verify.sh --plan
@@ -84,6 +85,7 @@ export async function runPlan(root, config) {
   let plan = result.data;
   plan.prd = plan.prd || prd;
   plan = normalizeWaves(plan);
+  plan = normalizePlanAcceptance(plan);
 
   // Write acceptance.json stubs
   const slug = path.basename(path.dirname(prdPath));
@@ -96,7 +98,16 @@ export async function runPlan(root, config) {
         entries.push({ id: a, passes: false, test: null, unit: u.id });
       }
     }
-    fs.writeFileSync(accPath, JSON.stringify(entries, null, 2) + '\n');
+    fs.writeFileSync(accPath, JSON.stringify({ entries }, null, 2) + '\n');
+  }
+
+  const validated = validatePlan(root, plan, { prdSlug: slug });
+  if (!validated.ok) {
+    const err = new Error(
+      `Plan validation failed:\n${validated.errors.map((e) => `  - ${e}`).join('\n')}`,
+    );
+    err.exitCode = 1;
+    throw err;
   }
 
   const out = path.join(root, 'harness', 'state', 'plan.json');
