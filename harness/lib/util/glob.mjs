@@ -30,5 +30,7 @@ function globToRegExp(glob) {
       s += c;
     }
   }
+  // Pattern is an escaped harness glob (touches / triggers), not network input.
+  // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp
   return new RegExp(`^${s}$`);
 }

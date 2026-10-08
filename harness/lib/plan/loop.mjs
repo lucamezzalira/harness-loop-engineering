@@ -20,6 +20,7 @@ import { normalizePlanAcceptance, validatePlan } from './validate-plan.mjs';
 import { readSession, writeSession, recordUsage, renderReport } from '../accounting.mjs';
 import { computeTreeHash } from '../tree-hash.mjs';
 import { newSessionId } from '../log.mjs';
+import { minimatchLike } from '../util/glob.mjs';
 
 const TERMINAL_UNIT_STATUS = new Set(['complete', 'unclosable']);
 
@@ -490,12 +491,7 @@ export function pathMatchesTouch(relPath, touch) {
     const prefix = t.slice(0, -3);
     return p === prefix || p.startsWith(prefix + '/');
   }
-  const esc = t
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-    .replace(/\*\*/g, '<<<DS>>>')
-    .replace(/\*/g, '[^/]*')
-    .replace(/<<<DS>>>/g, '.*');
-  return new RegExp(`^${esc}$`).test(p);
+  return minimatchLike(p, t);
 }
 
 function dirHasNonNoiseFiles(absDir) {
