@@ -1,5 +1,7 @@
 # Set exactly one tool. There is no default.
 tool: cursor
+# Profiles live in harness/models.yaml (default | offline | hybrid-local | cheap).
+# hybrid-local: Ollama for review roles + keep implementers on the host tool.
 profile: default
 confirmProfile: true
 

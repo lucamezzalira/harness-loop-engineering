@@ -65,19 +65,16 @@ export async function runChecks(root, config, opts) {
     .filter((s) => skippedLocalOnly.includes(s.name) && tierWouldInclude(s))
     .map((s) => s.name);
 
-  const filesForEdit =
-    opts.tier === 'edit'
-      ? opts.files?.length
-        ? opts.files
-        : changedFiles(root)
-      : [];
+  // Edit/turn/commit all pass changed files so unit.sh can scope tests.
+  // Empty list → unit sensor falls back to full `npm test`.
+  const scopeFiles = opts.files?.length ? opts.files : changedFiles(root);
 
   const envBase = {
     ...process.env,
     HARNESS_ROOT: root,
     HARNESS_ENV: harnessEnv,
     HARNESS_TIER: opts.tier,
-    HARNESS_CHANGED_FILES: filesForEdit.join('\n'),
+    HARNESS_CHANGED_FILES: scopeFiles.join('\n'),
     HARNESS_CONFIG_JSON: JSON.stringify(config),
     HARNESS_BASELINE_JSON: JSON.stringify(config.baseline || {}),
   };

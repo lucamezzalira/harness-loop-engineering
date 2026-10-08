@@ -27,19 +27,24 @@ roles:
   infra:        { enabled: false }         # off until infra/ is populated
 
 # When each role runs during a session.
-# turn = after every agent turn; unit = after a unit of work completes.
+# turn = after every agent turn; unit = after a unit completes;
+# wave = after a parallel/serial wave; ship = final panel before staging.
 # Path triggers add a role temporarily when a matching file changed.
 review:
   maxCycles: 3                              # loops before the panel escalates
   blockAt: [P0, P1]                         # severities that halt the session
   requireGreen: true                        # a session cannot end with any P0/P1 open
   cadence:
-    turn: [reviewer]                        # just the reviewer on every turn
-    unit: [reviewer, security, product, qa] # the full panel at unit boundaries
+    # Mid-loop: fast. Unit end owns product/security. Wave/ship: specialists.
+    turn: [reviewer]
+    unit: [security, product]
+    wave: [reviewer, security, product, qa]
+    ship: [reviewer, security, product, qa]
   triggers:                                 # extra roles when files match
     security: ['services/**/auth/**', '**/log*.js', '**/*secret*']
     infra:    ['infra/**', 'terraform/**']
     product:  ['specs/**']
+    performance: ['services/**', 'examples/**', '**/webpack*.{js,cjs,mjs,ts}']
 
 # How role findings map to severity.
 # The role returns a category from a closed list; this table decides how

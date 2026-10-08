@@ -306,7 +306,12 @@ Review roles: host-tool CLI first (Cursor / Claude Code / Codex), then provider 
 | `verify.failFast`     | `true`                | Stops at first blocking fail       | `false` in CI to collect all failures                            |
 | `review.maxCycles`    | `3`                   | Panel iterations before escalation | Lower to save cost; higher for stubborn P1s                      |
 | `review.cadence.turn` | `[reviewer]`          | Roles at end of turn               | Add roles only if budget allows                                  |
+| `review.cadence.unit` | `[security, product]` | Roles at unit end                  | Keep cheap; put specialists on wave/ship                         |
+| `review.cadence.wave` | specialists           | Roles after a wave                 | Expand when parallel waves need broader review                   |
+| `review.cadence.ship` | specialists           | Final panel before staging         | Must stay complete enough to catch acceptance gaps               |
+| `loop.unitStallFactor`| `2`                   | Stall → `unclosable` ceiling       | Raise only if units routinely need long recoveries               |
 | `loop.maxTurns`       | required for `--loop` | Hard stop on agent cycles          | Size to the PRD, not "unlimited"                                 |
+| `profile` (local)     | `default`             | Model assignment from models.yaml  | `hybrid-local` for Ollama panels + host-tool edits               |
 | `baseline.*`          | set by `--install`    | Ratchet: fail on growth only       | Lower after a cleanup; never raise casually                      |
 | `logs.enabled`        | `false`               | NDJSON event log                   | `true` / `full` when debugging a stuck loop                      |
 | `confirmProfile`      | `true`                | Asks before spending on plan/loop  | `false` only in controlled automation (`gate: never` also skips) |
@@ -352,11 +357,25 @@ examples/two-services/    # deletable demo estate
 
 ## Review panel
 
-At turn end: turn-tier checks + **reviewer** only (cheap).
+| Cadence | When | Default roles |
+| --- | --- | --- |
+| `turn` | After every agent turn | `reviewer` only (cheap) |
+| `unit` | When a unit looks complete | `security`, `product` |
+| `wave` | After a wave merges | Reviewer + specialists |
+| `ship` | Final panel before staging | Same specialist set as wave |
 
-At unit end (and before commit): full panel from `review.cadence.unit`, filtered by path triggers in `harness.yaml`.
+Path triggers in `harness.yaml` still add roles when matching files change.
+Security always runs on unit complete even without a path hit.
 
 Roles return categories only. Config maps them to severity. P0/P1 block. P2/P3 go to `harness/state/backlog.json` (shown at session end). A category that shows up across three or more units is written to `harness/state/proposed-rules.md`.
+
+If the ship panel blocks (`stopReason: ship-panel-blocking`), `./verify.sh --loop` resumes and re-runs the ship panel only (waves are skipped when every unit is already `complete` or `unclosable`).
+
+See [docs/loop-failure-modes.md](docs/loop-failure-modes.md) for stall/`unclosable`, plan validation, scoped unit tests, and hybrid-local profiles.
+
+## Scoped unit tests
+
+The `unit` sensor reads `HARNESS_CHANGED_FILES` (set by the check runner on every tier). It runs package-prefix or colocated tests when it can, and falls back to full `npm test` when the list is empty. Set `HARNESS_UNIT_FULL=1` to force the full suite.
 
 ## Ship gate
 
@@ -365,6 +384,7 @@ Independent of `gate` and `--loop`:
 - Commit, push, PR, and deploy require an explicit developer instruction in the session.
 - Non-interactive runs **refuse** those actions (no hang, no silent proceed).
 - A completed `--loop` leaves work **staged and uncommitted**.
+- A ship-panel-blocking stop leaves findings in `harness/state/review.md`; fix them, then re-run `--loop`.
 - `HARNESS_BYPASS=<reason>` logs to `harness/state/bypass.log` and expects a `Harness-Bypass:` trailer.
 
 ## Non-interactive prompts
