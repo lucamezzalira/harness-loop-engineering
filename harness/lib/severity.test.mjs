@@ -1,7 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { parse as parseYaml } from 'yaml';
 import { mergeFindings, partitionByPolicy } from './panel/merge.mjs';
 import { validateSeverityMap, mapCategory } from './severity.mjs';
+import { loadConfig } from './config.mjs';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+
+test('A-05 check-weakened is P0', () => {
+  const raw = parseYaml(fs.readFileSync(path.join(ROOT, 'harness.yaml'), 'utf8'));
+  assert.equal(raw.severity.categories['check-weakened'], 'P0');
+  const config = loadConfig(ROOT);
+  assert.equal(mapCategory('check-weakened', config.severity), 'P0');
+});
 
 test('unknown category maps to default', () => {
   const map = validateSeverityMap({

@@ -25,6 +25,8 @@ roles:
   test-writer:  { enabled: true }          # test authoring
   qa:           { enabled: false }         # separate qa role, off until qa team exists
   infra:        { enabled: false }         # off until infra/ is populated
+  acceptance-checker: { enabled: true }    # grades acceptance claims; read-only
+  integrity-checker:  { enabled: true }    # grades weakened checks; read-only
 
 # When each role runs during a session.
 # turn = after every agent turn; unit = after a unit completes;
@@ -37,7 +39,7 @@ review:
   cadence:
     # Mid-loop: fast. Unit end owns product/security. Wave/ship: specialists.
     turn: [reviewer]
-    unit: [security, product]
+    unit: [security, product, acceptance-checker, integrity-checker]
     wave: [reviewer, security, product, qa]
     ship: [reviewer, security, product, qa]
   triggers:                                 # extra roles when files match
@@ -56,6 +58,7 @@ severity:
     pii-in-logs:         P0
     boundary-violation:  P0
     contract-breaking:   P0
+    check-weakened:      P0
     acceptance-unmet:    P1
     missing-idempotency: P1
     error-swallowed:     P1

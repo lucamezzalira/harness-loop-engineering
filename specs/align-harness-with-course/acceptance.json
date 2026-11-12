@@ -1,0 +1,40 @@
+{
+  "entries": [
+    {
+      "id": "A-01",
+      "description": "For each tool, the first line of every rendered role file is ---, and its frontmatter parses with name and description set.",
+      "passes": true,
+      "test": "harness/lib/render/render.test.mjs"
+    },
+    {
+      "id": "A-02",
+      "description": "Read-only roles render with readonly: true for Cursor, and with no Edit, Write or Bash tools for Claude Code.",
+      "passes": true,
+      "test": "harness/lib/render/render.test.mjs"
+    },
+    {
+      "id": "A-03",
+      "description": "./verify.sh --render --check passes after a fresh render.",
+      "passes": true,
+      "test": "harness/lib/render/render.test.mjs"
+    },
+    {
+      "id": "A-04",
+      "description": "Both checker roles exist with frontmatter name, description, tier deep and tools read, and both render for Cursor and Claude.",
+      "passes": true,
+      "test": "harness/lib/render/render.test.mjs"
+    },
+    {
+      "id": "A-05",
+      "description": "Severity category check-weakened is P0 in harness.yaml.",
+      "passes": true,
+      "test": "harness/lib/severity.test.mjs"
+    },
+    {
+      "id": "A-06",
+      "description": "A fixture diff that deletes a test makes the integrity-checker prompt fixture expect check-weakened.",
+      "passes": true,
+      "test": "harness/lib/agents/fake-provider.test.mjs"
+    }
+  ]
+}

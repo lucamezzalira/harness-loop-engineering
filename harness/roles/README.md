@@ -12,6 +12,8 @@ A model buys reliability once. A check buys it every time.
 | infra | IaC changes | `terraform validate`, `plan`, `tfsec` | balanced | yes |
 | test-writer | tests | mutation score. objective | balanced | yes |
 | qa | a reproduction | binary: fails on the broken commit, passes on the fixed one | fast | yes |
+| acceptance-checker | verdict per acceptance id | a criterion with no named test is a fail. the report and the diff are the evidence | deep | no |
+| integrity-checker | verdict plus findings | a weakened check it does not flag is one nobody hears about | deep | no |
 
 Roles never choose severity. They return a `category` from the closed list in `harness.yaml`; configuration maps category → P0–P3.
 

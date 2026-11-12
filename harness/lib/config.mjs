@@ -21,6 +21,8 @@ export const DEFAULTS = Object.freeze({
     planner: { enabled: true },
     qa: { enabled: false },
     infra: { enabled: false },
+    'acceptance-checker': { enabled: true },
+    'integrity-checker': { enabled: true },
   },
   review: {
     maxCycles: 3,
@@ -29,7 +31,7 @@ export const DEFAULTS = Object.freeze({
     cadence: {
       // Mid-loop: fast. Unit end owns product/security. Wave/ship: specialists.
       turn: ['reviewer'],
-      unit: ['security', 'product'],
+      unit: ['security', 'product', 'acceptance-checker', 'integrity-checker'],
       wave: ['reviewer', 'security', 'product', 'qa'],
       ship: ['reviewer', 'security', 'product', 'qa'],
     },
@@ -199,7 +201,7 @@ export function resolveRoleBinding(config, roleName) {
     err.exitCode = 2;
     throw err;
   }
-  const tierName = profile[roleName];
+  const tierName = profile[roleName] || tierFromRoleClass(config, profile, roleName);
   if (!tierName) return null;
   const tier = config.models.tiers?.[tierName];
   if (!tier) {
@@ -221,26 +223,36 @@ export function formatAssignmentBlock(config) {
   const tool = config.tool || '(unset)';
   const profile = config.profile || 'default';
   const lines = [`Profile: ${profile}                                 tool: ${tool}`, ''];
-  const roleNames = ['planner', 'reviewer', 'security', 'product', 'test-writer', 'qa', 'infra'];
+  const roleNames = [
+    'planner',
+    'reviewer',
+    'security',
+    'product',
+    'test-writer',
+    'qa',
+    'infra',
+    'acceptance-checker',
+    'integrity-checker',
+  ];
   for (const name of roleNames) {
     const enabled = config.roles?.[name]?.enabled !== false;
     if (!enabled) {
-      lines.push(`  ${name.padEnd(14)}disabled`);
+      lines.push(`  ${name.padEnd(20)}disabled`);
       continue;
     }
     try {
       const b = resolveRoleBinding(config, name);
       if (!b) {
-        lines.push(`  ${name.padEnd(14)}(unbound)`);
+        lines.push(`  ${name.padEnd(20)}(unbound)`);
         continue;
       }
       const prov =
         b.providerMeta?.type === 'openai-compatible'
           ? `local (${b.providerMeta.baseUrl || 'custom'})`
           : b.provider;
-      lines.push(`  ${name.padEnd(14)}${String(b.modelId).padEnd(28)}${prov}`);
+      lines.push(`  ${name.padEnd(20)}${String(b.modelId).padEnd(28)}${prov}`);
     } catch (e) {
-      lines.push(`  ${name.padEnd(14)}ERROR: ${e.message}`);
+      lines.push(`  ${name.padEnd(20)}ERROR: ${e.message}`);
     }
   }
   const turnRoles = config.review?.cadence?.turn || [];
@@ -290,6 +302,41 @@ export function assertLoopConfig(config) {
   );
   err.exitCode = 2;
   throw err;
+}
+
+/**
+ * A role missing from the active profile uses the tier of the same class
+ * already in that profile (deep follows reviewer, balanced follows product,
+ * fast follows qa). `harness/models.yaml` stays unchanged.
+ */
+const TIER_CLASS_ROLE = Object.freeze({
+  deep: 'reviewer',
+  balanced: 'product',
+  fast: 'qa',
+});
+
+function tierFromRoleClass(config, profile, roleName) {
+  const declared = declaredRoleTier(config._meta?.root, roleName);
+  const via = declared ? TIER_CLASS_ROLE[declared] : null;
+  if (!via) return null;
+  return profile[via] || null;
+}
+
+function declaredRoleTier(root, roleName) {
+  if (!root) return null;
+  const file = path.join(root, 'harness', 'roles', `${roleName}.md`);
+  if (!fs.existsSync(file)) return null;
+  const text = fs.readFileSync(file, 'utf8');
+  if (!text.startsWith('---')) return null;
+  const end = text.indexOf('\n---', 3);
+  if (end < 0) return null;
+  let data;
+  try {
+    data = parseYaml(text.slice(text.indexOf('\n') + 1, end));
+  } catch {
+    return null;
+  }
+  return typeof data?.tier === 'string' ? data.tier.trim() : null;
 }
 
 export function writeYaml(file, data) {

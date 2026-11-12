@@ -87,7 +87,7 @@ export async function runPanel(root, config, opts = {}) {
       const binding = resolveRoleBinding(config, role);
       if (!binding) return { role, ok: false, error: 'unbound' };
       const roleMd = loadRoleFile(root, role) || `You are the ${role} reviewer.`;
-      const systemPrompt = `${roleMd}\n\nReturn a JSON array only. Each item: { "category": "<from closed list>", "file": "...", "line": 0, "endLine": 0, "message": "..." }.\nNever set severity. Categories must come from harness.yaml severity keys.`;
+      const systemPrompt = systemPromptForRole(roleMd);
       const userPrompt = `Review this diff (read-only). Diff files: ${diffFiles.join(', ') || '(none)'}\n\n\`\`\`diff\n${diffText.slice(0, 120_000)}\n\`\`\``;
       const result = await invokeRole({
         root,
@@ -98,7 +98,7 @@ export async function runPanel(root, config, opts = {}) {
         expect: 'json',
       });
       if (!result.ok) return { role, ok: false, error: result.error, usage: result.usage };
-      const arr = Array.isArray(result.data) ? result.data : [];
+      const arr = findingsFromRoleOutput(result.data);
       for (const item of arr) {
         findings.push({ ...item, role });
       }
@@ -127,6 +127,36 @@ export async function runPanel(root, config, opts = {}) {
   fs.writeFileSync(path.join(stateDir, 'review.md'), table);
 
   return { roles, roleResults, merged, blocking, backlogged, table };
+}
+
+/**
+ * Roles that declare a `verdict` object keep that contract.
+ * Other roles still return a findings array.
+ */
+export function systemPromptForRole(roleMd) {
+  if (typeof roleMd === 'string' && /\bverdict\b/.test(roleMd)) return roleMd;
+  return `${roleMd}\n\nReturn a JSON array only. Each item: { "category": "<from closed list>", "file": "...", "line": 0, "endLine": 0, "message": "..." }.\nNever set severity. Categories must come from harness.yaml severity keys.`;
+}
+
+/**
+ * Panel findings from a role payload: a findings array, an integrity
+ * `{verdict, findings}` object, or failed acceptance criteria.
+ */
+export function findingsFromRoleOutput(data) {
+  if (Array.isArray(data)) return data;
+  if (!data || typeof data !== 'object') return [];
+  if (Array.isArray(data.findings)) return data.findings;
+  if (Array.isArray(data.criteria)) {
+    return data.criteria
+      .filter((c) => String(c?.status || '').toUpperCase() === 'FAIL')
+      .map((c) => ({
+        category: 'acceptance-unmet',
+        file: c.file || '',
+        line: Number(c.line) || 0,
+        message: `${c.id || 'criterion'}: ${c.evidence || 'no evidence'}`,
+      }));
+  }
+  return [];
 }
 
 function listDiffFiles(root, sinceHash) {
