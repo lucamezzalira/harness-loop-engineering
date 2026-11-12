@@ -8,12 +8,12 @@ Thin scripts under `.claude/hooks/*.sh` only:
 
 ## Events (exactly four)
 
-| Event | Script |
-| ----- | ------ |
+| Event          | Script                   |
+| -------------- | ------------------------ |
 | `SessionStart` | `hooks/session-start.sh` |
-| `PreToolUse` | `hooks/pre-tool.sh` |
-| `PostToolUse` | `hooks/post-tool.sh` |
-| `Stop` | `hooks/stop.sh` |
+| `PreToolUse`   | `hooks/pre-tool.sh`      |
+| `PostToolUse`  | `hooks/post-tool.sh`     |
+| `Stop`         | `hooks/stop.sh`          |
 
 ## Defaults
 

@@ -23,7 +23,10 @@ test('A-18 an empty turn diff is no-changes with changes 0', async () => {
       '',
     ].join('\n'),
   );
-  fs.writeFileSync(path.join(tmp, 'harness', 'sensors', 'checks', 'ok.sh'), '#!/usr/bin/env bash\necho ok\n');
+  fs.writeFileSync(
+    path.join(tmp, 'harness', 'sensors', 'checks', 'ok.sh'),
+    '#!/usr/bin/env bash\necho ok\n',
+  );
   fs.writeFileSync(path.join(tmp, 'README'), 'x\n');
   spawnSync('git', ['add', '-A'], { cwd: tmp });
   const committed = spawnSync(
@@ -33,7 +36,11 @@ test('A-18 an empty turn diff is no-changes with changes 0', async () => {
   );
   assert.equal(committed.status, 0, committed.stderr?.toString());
   try {
-    const report = await runChecks(tmp, { verify: { failFast: true }, baseline: {} }, { tier: 'turn' });
+    const report = await runChecks(
+      tmp,
+      { verify: { failFast: true }, baseline: {} },
+      { tier: 'turn' },
+    );
     assert.equal(report.status, 'no-changes');
     assert.equal(report.changes, 0);
   } finally {

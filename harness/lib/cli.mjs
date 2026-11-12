@@ -3,9 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig, formatAssignmentBlock, requireTool } from './config.mjs';
-import { runChecks, reportExitCode, printWhereSummary } from './checks/runner.mjs';
+import { runChecks, reportExitCode, printWhereSummary, skippedToolLine } from './checks/runner.mjs';
 import { resolveHarnessEnv } from './checks/common.mjs';
-import { writeReport, readReport } from './report.mjs';
+import { readReport } from './report.mjs';
 import { formatPendingHumanReview } from './review/human-required.mjs';
 import { computeTreeHash } from './tree-hash.mjs';
 import { runInstall } from './install.mjs';
@@ -16,10 +16,9 @@ import { postTool } from './enforce/post_tool.mjs';
 import { stopSequence, preCommitGate } from './enforce/stop.mjs';
 import { runPlan } from './plan/plan.mjs';
 import { runLoop, runResume } from './plan/loop.mjs';
-import { renderBacklog } from './panel/backlog.mjs';
+import { triageBacklog } from './panel/backlog.mjs';
 import { renderReport } from './accounting.mjs';
-import { createLogger, newSessionId } from './log.mjs';
-
+import { allowCheckEdit } from './enforce/allow-check-edit.mjs';
 const VERSION = '0.1.0';
 const ROOT =
   process.env.HARNESS_ROOT ||
@@ -34,6 +33,7 @@ const ACTION_FLAGS = new Set([
   '--status',
   '--report',
   '--backlog',
+  '--allow-check-edit',
   '--install',
   '--render',
   '--hook',
@@ -56,7 +56,8 @@ Usage (flags select the action; configuration supplies every parameter; no flag 
   ./verify.sh --resume          continue recorded run
   ./verify.sh --status          resolved config + current run
   ./verify.sh --report          session cost/token recap
-  ./verify.sh --backlog         P2 and below list
+  ./verify.sh --backlog         P2 and below list; triage on a terminal
+  ./verify.sh --allow-check-edit  authorise a protected check-path edit (terminal only)
   ./verify.sh --install         detect, write harness, wire hooks
   ./verify.sh --render          write adapter for configured tool
   ./verify.sh --render --check  exit 1 on drift
@@ -104,6 +105,7 @@ function parseArgs(argv) {
     '--status': { action: 'status' },
     '--report': { action: 'report' },
     '--backlog': { action: 'backlog' },
+    '--allow-check-edit': { action: 'allow-check-edit' },
     '--install': { action: 'install' },
     '--hook': { action: 'hook' },
   };
@@ -158,6 +160,12 @@ async function main() {
     process.exit(0);
   }
 
+  if (parsed.action === 'allow-check-edit') {
+    const allowed = await allowCheckEdit(ROOT);
+    console.log(allowed.text);
+    process.exit(allowed.exitCode);
+  }
+
   // Ensure state dir
   fs.mkdirSync(path.join(ROOT, 'harness', 'state'), { recursive: true });
 
@@ -185,7 +193,12 @@ async function main() {
       if (code !== 0) {
         console.error(
           JSON.stringify(
-            { status: report.status, tier: report.tier, env: report.env, treeHash: report.treeHash },
+            {
+              status: report.status,
+              tier: report.tier,
+              env: report.env,
+              treeHash: report.treeHash,
+            },
             null,
             2,
           ),
@@ -228,6 +241,8 @@ async function main() {
       console.log(`tool: ${config.tool} · profile: ${config.profile || 'default'}`);
       console.log(`env: ${harnessEnv} (HARNESS_ENV)`);
       console.log(`prd: ${config.loop?.prd || '(none)'}`);
+      const humanPaths = config.review?.humanRequired?.paths || [];
+      console.log(`humanRequired.paths: ${humanPaths.join(', ')}`);
       console.log('');
       console.log(formatAssignmentBlock(config));
       console.log('');
@@ -239,6 +254,8 @@ async function main() {
             (report.hasWarnings ? ' hasWarnings' : ''),
         );
         console.log(formatPendingHumanReview(report));
+        const missing = skippedToolLine(report);
+        if (missing) console.log(missing);
       }
       const session = path.join(ROOT, 'harness', 'state', 'session.json');
       if (fs.existsSync(session)) {
@@ -258,8 +275,9 @@ async function main() {
     }
 
     if (parsed.action === 'backlog') {
-      console.log(renderBacklog(ROOT));
-      process.exit(0);
+      const triaged = await triageBacklog(ROOT);
+      process.stdout.write(triaged.text.endsWith('\n') ? triaged.text : `${triaged.text}\n`);
+      process.exit(triaged.exitCode);
     }
 
     if (parsed.action === 'plan') {
@@ -358,9 +376,7 @@ async function main() {
           );
           process.exit(2);
         }
-        console.log(
-          JSON.stringify({ ok: true, continue: true, permission: 'allow', moment }),
-        );
+        console.log(JSON.stringify({ ok: true, continue: true, permission: 'allow', moment }));
         process.exit(0);
       }
 
@@ -413,9 +429,7 @@ async function main() {
           );
           process.exit(0);
         }
-        console.log(
-          JSON.stringify({ ok: true, continue: true, moment: 'stop', reason: r.reason }),
-        );
+        console.log(JSON.stringify({ ok: true, continue: true, moment: 'stop', reason: r.reason }));
         process.exit(0);
       }
 
@@ -481,11 +495,7 @@ function isMoment(moment, names) {
 
 /** Map Cursor beforeShellExecution fields into preTool's expected shape. */
 function normalizeShellPayload(payload, moment) {
-  const command =
-    payload.command ||
-    payload.tool_input?.command ||
-    payload.input?.command ||
-    '';
+  const command = payload.command || payload.tool_input?.command || payload.input?.command || '';
   return {
     ...payload,
     moment,

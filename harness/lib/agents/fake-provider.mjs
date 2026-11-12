@@ -2,6 +2,8 @@
  * Offline fake provider for tests. Selected by HARNESS_FAKE_PROVIDER=1.
  * Returns canned JSON and fixed token counts (or no usage when HARNESS_FAKE_NO_USAGE=1).
  */
+import fs from 'node:fs';
+import path from 'node:path';
 
 const PLAN_JSON = {
   prd: 'specs/example-idempotent-consumers/PRD.md',
@@ -71,8 +73,14 @@ export async function invokeFake(opts) {
     ].join('\n');
     data = text;
   } else {
-    data = [];
-    text = '[]';
+    writeFakeFile(opts.userPrompt || '');
+    if (process.env.HARNESS_FAKE_FINDINGS) {
+      data = JSON.parse(process.env.HARNESS_FAKE_FINDINGS);
+      text = process.env.HARNESS_FAKE_FINDINGS;
+    } else {
+      data = [];
+      text = '[]';
+    }
   }
 
   const usage = noUsage
@@ -110,8 +118,24 @@ function integrityVerdict(systemPrompt, userPrompt) {
   };
 }
 
+function writeFakeFile(userPrompt) {
+  const spec = process.env.HARNESS_FAKE_WRITE || '';
+  const root = process.env.HARNESS_FAKE_ROOT || '';
+  if (!spec || !root) return;
+  const eq = spec.indexOf('=');
+  if (eq < 0) return;
+  const id = spec.slice(0, eq);
+  const rel = spec.slice(eq + 1);
+  if (!userPrompt.includes(`Continue unit ${id}`)) return;
+  const dest = path.join(root, rel);
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.writeFileSync(dest, 'export const login = () => true;\n');
+}
+
 function deletedTestPath(diff) {
-  const chunks = String(diff || '').split(/^diff --git /m).slice(1);
+  const chunks = String(diff || '')
+    .split(/^diff --git /m)
+    .slice(1);
   for (const chunk of chunks) {
     const header = chunk.split('\n')[0] || '';
     const match = header.match(/^a\/(\S+)/);

@@ -37,8 +37,28 @@ export function buildDeterministicSection(stats = {}) {
   }
   lines.push('dismissedRate:');
   const dismissed = stats.dismissedByRole || {};
-  for (const role of Object.keys(dismissed).sort()) {
-    lines.push(`  ${role}: ${dismissed[role]}`);
+  const totals = stats.findingTotals || {};
+  const roles = [...new Set([...Object.keys(totals), ...Object.keys(dismissed)])].sort();
+  for (const role of roles) {
+    const raw = dismissed[role];
+    const row = totals[role];
+    if (row && typeof row === 'object') {
+      const n = Number(row.dismissed ?? raw ?? 0);
+      const total = Number(row.total || 0);
+      const rate = total ? Math.round((n / total) * 100) : 0;
+      lines.push(`  ${role}: ${n}/${total} (${rate}%)`);
+    } else {
+      lines.push(`  ${role}: ${raw}`);
+    }
+  }
+  lines.push('checkEdits:');
+  const edits = [...(stats.checkEdits || [])].sort((a, b) =>
+    String(a.at).localeCompare(String(b.at)),
+  );
+  if (!edits.length) lines.push('  (none)');
+  for (const edit of edits) {
+    const paths = Array.isArray(edit.paths) ? edit.paths.join(',') : '';
+    lines.push(`  ${edit.at} ${edit.by} ${paths} ${edit.reason}`);
   }
   return lines.join('\n');
 }
@@ -54,7 +74,11 @@ export function capProposals(text, limit = 3) {
   return items.slice(0, limit).join('\n');
 }
 
-export async function composeWaveRetro(root, config, { sessionId, wave, stats, proposedRules = '' }) {
+export async function composeWaveRetro(
+  root,
+  config,
+  { sessionId, wave, stats, proposedRules = '' },
+) {
   const deterministic = buildDeterministicSection(stats);
   let proposalBody = 'No proposals.';
   const binding = resolveRoleBinding(config, 'reviewer');

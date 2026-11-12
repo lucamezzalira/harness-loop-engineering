@@ -21,7 +21,14 @@ import { readSession, writeSession, recordUsage, renderReport } from '../account
 import { computeTreeHash } from '../tree-hash.mjs';
 import { newSessionId } from '../log.mjs';
 import { minimatchLike } from '../util/glob.mjs';
-import { collectHumanInputs, matchHumanRequired } from '../review/human-required.mjs';
+import {
+  collectHumanInputs,
+  filterDiffToFiles,
+  matchHumanRequired,
+} from '../review/human-required.mjs';
+import { clearCheckEdit, liveCheckEdits } from '../enforce/check-edit-record.mjs';
+import { findingTotalsFromSession } from '../accounting-review.mjs';
+import { adoptPanelSession } from '../panel/outcomes.mjs';
 import { composeWaveRetro } from './retro.mjs';
 
 const TERMINAL_UNIT_STATUS = new Set(['complete', 'unclosable', 'needs-human']);
@@ -70,6 +77,7 @@ function finishNothingToDo(root, session, why) {
         unitStatus: {},
       };
   next.stopReason = 'nothing-to-do';
+  clearCheckEdit(next);
   writeSession(root, next);
   const line = `nothing-to-do: ${why}`;
   appendHandoff(root, { title: 'Nothing to do', body: line });
@@ -101,6 +109,8 @@ function waveStats(session) {
     mutants: session.mutants || [],
     timeByUnit: session.unitTimeSec || {},
     dismissedByRole: session.dismissedByRole || {},
+    findingTotals: findingTotalsFromSession(session),
+    checkEdits: liveCheckEdits(session),
   };
 }
 
@@ -113,9 +123,13 @@ function diffNames(root, args) {
     .filter(Boolean);
 }
 
-export function applyHumanGate(root, config, session, unitId) {
+export function applyHumanGate(root, config, session, unitId, unit) {
   const inputs = collectHumanInputs(root);
-  const human = matchHumanRequired(inputs.files, inputs.diff, config);
+  const touches = unit?.touches || [];
+  const files = touches.length
+    ? inputs.files.filter((file) => touches.some((touch) => pathMatchesTouch(file, touch)))
+    : inputs.files;
+  const human = matchHumanRequired(files, filterDiffToFiles(inputs.diff, files), config);
   if (!human.required) return { moveOn: false, human };
   session.unitStatus = session.unitStatus || {};
   session.unitStatus[unitId] = 'needs-human';
@@ -179,6 +193,10 @@ export async function runLoop(root, config, { resume = false } = {}) {
       lastFailFingerprint: null,
     };
   }
+  session.roles = session.roles || {};
+  session.units = session.units || {};
+  session.panelCycles = session.panelCycles || {};
+  session.unitStatus = session.unitStatus || {};
 
   if (wantResume && config.loop?.confirmOnTreeDrift !== false) {
     const saved = session.treeHashAtPause;
@@ -217,8 +235,7 @@ export async function runLoop(root, config, { resume = false } = {}) {
   try {
     // After ship-panel-blocking, every unit is terminal; skip waves and re-run ship.
     const allUnitsComplete =
-      unitIds.length > 0 &&
-      unitIds.every((id) => isTerminalUnitStatus(session.unitStatus[id]));
+      unitIds.length > 0 && unitIds.every((id) => isTerminalUnitStatus(session.unitStatus[id]));
     if (allUnitsComplete) {
       console.error('All units complete; skipping wave panels and running ship panel.');
     }
@@ -285,6 +302,7 @@ export async function runLoop(root, config, { resume = false } = {}) {
       cadence: shipCadence,
       unitComplete: true,
     });
+    adoptPanelSession(root, session);
     if (panel.blocking?.length) {
       session.stopReason = 'ship-panel-blocking';
       writeSession(root, session);
@@ -307,6 +325,7 @@ export async function runLoop(root, config, { resume = false } = {}) {
     if (emptyTree) {
       session.stopReason = 'done-without-changes';
       session.treeHashAtPause = computeTreeHash(root);
+      clearCheckEdit(session);
       writeSession(root, session);
       appendHandoff(root, {
         title: 'Done without changes',
@@ -316,6 +335,7 @@ export async function runLoop(root, config, { resume = false } = {}) {
     }
     session.stopReason = session.stopReason || 'complete';
     session.treeHashAtPause = computeTreeHash(root);
+    clearCheckEdit(session);
     writeSession(root, session);
 
     expireBacklog(root, config);
@@ -412,12 +432,13 @@ async function runUnit(root, config, plan, session, unitId, budgets) {
     if (done) {
       session.unitTurns = session.unitTurns || {};
       session.unitTurns[unitId] = unitTurns;
-      if (applyHumanGate(root, config, session, unitId).moveOn) return null;
+      if (applyHumanGate(root, config, session, unitId, unit).moveOn) return null;
       const panel = await runPanel(root, config, {
         cadence: 'unit',
         unitId,
         unitComplete: true,
       });
+      adoptPanelSession(root, session);
       session.panelCycles[unitId] = (session.panelCycles[unitId] || 0) + 1;
       if (
         panel.blocking?.length &&
@@ -464,7 +485,7 @@ async function runUnitInWorktree(root, config, plan, session, unitId) {
   return { unitId, wt };
 }
 
-function mergeWorktrees(root, wave, session) {
+function mergeWorktrees(root, wave, _session) {
   for (const id of wave) {
     const wt = path.join(root, 'worktrees', id);
     if (!fs.existsSync(wt)) continue;
@@ -591,7 +612,9 @@ function loadUnitAcceptance(root, unit) {
 
 /** Match a repo-relative path against a unit touch glob (supports * and **). */
 export function pathMatchesTouch(relPath, touch) {
-  const p = String(relPath || '').replace(/\\/g, '/').replace(/^\.\//, '');
+  const p = String(relPath || '')
+    .replace(/\\/g, '/')
+    .replace(/^\.\//, '');
   const t = String(touch || '').replace(/\\/g, '/');
   if (!t) return false;
   if (t.endsWith('/**')) {
@@ -665,7 +688,9 @@ export function isHarnessStateNoise(relPath) {
 }
 
 function porcelainPath(line) {
-  let rest = String(line || '').slice(3).trim();
+  let rest = String(line || '')
+    .slice(3)
+    .trim();
   if (rest.includes(' -> ')) rest = rest.split(' -> ').pop();
   return rest.replace(/^"|"$/g, '');
 }

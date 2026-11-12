@@ -20,11 +20,7 @@ test('A-09 deleted tests, skips, suppressions, and unprotected sensor edits fail
 
   const skipped = evaluateCheckIntegrity({
     nameStatus: ['M\tservices/billing/order.test.mjs'],
-    diff: [
-      '+++ b/services/billing/order.test.mjs',
-      '@@ -1,0 +1,1 @@',
-      `+${skipLine}`,
-    ].join('\n'),
+    diff: ['+++ b/services/billing/order.test.mjs', '@@ -1,0 +1,1 @@', `+${skipLine}`].join('\n'),
   });
   assert.equal(skipped.exitCode, 1);
 
@@ -44,13 +40,24 @@ test('A-09 deleted tests, skips, suppressions, and unprotected sensor edits fail
   const allowed = evaluateCheckIntegrity({
     nameStatus: ['M\tharness/sensors/checks/unit.sh'],
     diff: '',
-    session: { explicitCheckEdit: { by: 'developer' } },
+    session: {
+      id: 's',
+      explicitCheckEdit: {
+        paths: ['all'],
+        reason: 'developer instruction',
+        at: new Date().toISOString(),
+        by: 'developer',
+        sessionId: 's',
+      },
+    },
   });
   assert.equal(allowed.exitCode, 0);
 
   const clean = evaluateCheckIntegrity({
     nameStatus: ['M\tservices/billing/order.mjs'],
-    diff: ['+++ b/services/billing/order.mjs', '@@ -1,0 +1,1 @@', '+export const ok = 1;'].join('\n'),
+    diff: ['+++ b/services/billing/order.mjs', '@@ -1,0 +1,1 @@', '+export const ok = 1;'].join(
+      '\n',
+    ),
   });
   assert.equal(clean.exitCode, 0);
 });

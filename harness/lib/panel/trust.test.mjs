@@ -29,7 +29,13 @@ test('A-29 the same P1 finding blocks, backlogs, or stays in the review file', (
 });
 
 test('A-30 current roles default to blocking and an unlisted role defaults to shadow', () => {
-  for (const role of ['reviewer', 'security', 'product', 'acceptance-checker', 'integrity-checker']) {
+  for (const role of [
+    'reviewer',
+    'security',
+    'product',
+    'acceptance-checker',
+    'integrity-checker',
+  ]) {
     assert.equal(reviewMode({}, role), 'blocking', role);
   }
   assert.equal(reviewMode({}, 'brand-new'), 'shadow');

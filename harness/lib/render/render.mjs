@@ -113,7 +113,9 @@ export async function renderAdapter(root, config, { checkOnly = false } = {}) {
     console.error(
       'Note: for Cursor cloud agents, commit .cursor/hooks.json so enforcement follows the work off your machine.',
     );
-    console.error('Recover wedged hooks: echo \'{"version":1,"hooks":{}}\' > .cursor/hooks.json && Reload Window');
+    console.error(
+      'Recover wedged hooks: echo \'{"version":1,"hooks":{}}\' > .cursor/hooks.json && Reload Window',
+    );
   }
 
   return { ok: true, tool, dir, events };
@@ -170,15 +172,11 @@ function buildCursorHooksConfig(config) {
   return {
     version: 1,
     hooks: {
-      sessionStart: [
-        { command: 'bash hooks/session-start.sh', failClosed: false, timeout: 30 },
-      ],
+      sessionStart: [{ command: 'bash hooks/session-start.sh', failClosed: false, timeout: 30 }],
       beforeShellExecution: [
         { command: 'bash hooks/before-shell.sh', failClosed: fc, timeout: 15 },
       ],
-      afterFileEdit: [
-        { command: 'bash hooks/after-edit.sh', failClosed: false, timeout: 60 },
-      ],
+      afterFileEdit: [{ command: 'bash hooks/after-edit.sh', failClosed: false, timeout: 60 }],
       stop: [
         {
           command: 'bash hooks/stop.sh',
@@ -272,7 +270,10 @@ function renderRules(root, toolDir, tool) {
     if (!fs.statSync(src).isFile()) continue;
     const body = fs.readFileSync(src, 'utf8');
     const base = name.replace(/\.md$/i, '');
-    fs.writeFileSync(path.join(rulesDir, `${base}${ext}`), body.endsWith('\n') ? body : `${body}\n`);
+    fs.writeFileSync(
+      path.join(rulesDir, `${base}${ext}`),
+      body.endsWith('\n') ? body : `${body}\n`,
+    );
   }
 }
 
@@ -344,7 +345,11 @@ function splitRoleFrontmatter(text) {
 
 function normalizeToolList(tools) {
   if (Array.isArray(tools)) return tools.map((t) => String(t).trim()).filter(Boolean);
-  if (typeof tools === 'string') return tools.split(/[,\s]+/).map((t) => t.trim()).filter(Boolean);
+  if (typeof tools === 'string')
+    return tools
+      .split(/[,\s]+/)
+      .map((t) => t.trim())
+      .filter(Boolean);
   return [];
 }
 

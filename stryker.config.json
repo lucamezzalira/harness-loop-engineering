@@ -1,0 +1,13 @@
+{
+  "testRunner": "command",
+  "commandRunner": {
+    "command": "npm test"
+  },
+  "mutate": ["harness/lib/**/*.mjs", "!harness/lib/**/*.test.mjs"],
+  "reporters": ["json", "clear-text"],
+  "jsonReporter": {
+    "fileName": "reports/mutation/mutation.json"
+  },
+  "concurrency": 1,
+  "coverageAnalysis": "off"
+}

@@ -8,13 +8,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 
-const ROOT = process.env.HARNESS_ROOT || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT =
+  process.env.HARNESS_ROOT || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const SOURCE_DIR = path.join(ROOT, 'harness', 'render', 'rules');
-const RENDER_DIRS = [
-  path.join(ROOT, '.cursor', 'rules'),
-  path.join(ROOT, '.claude', 'rules'),
-];
+const RENDER_DIRS = [path.join(ROOT, '.cursor', 'rules'), path.join(ROOT, '.claude', 'rules')];
 
 let failures = 0;
 
@@ -103,7 +101,8 @@ function checkFile(abs, rel, { allowPlaceholderDescription = false } = {}) {
   const desc = data.description != null ? String(data.description).trim() : '';
   if (!allowPlaceholderDescription) {
     if (!desc) fail(rel, 'description', 'missing description');
-    else if (desc.length > 200) fail(rel, 'description', `description is ${desc.length} chars (max 200)`);
+    else if (desc.length > 200)
+      fail(rel, 'description', `description is ${desc.length} chars (max 200)`);
     else if (/^(I|You|We)\s/i.test(desc)) {
       fail(rel, 'description', 'description must be third person (must not start with I/You/We)');
     }
@@ -119,7 +118,8 @@ function checkFile(abs, rel, { allowPlaceholderDescription = false } = {}) {
 
   const { h1, paragraph } = firstParagraphAfterH1(body);
   if (!h1) fail(rel, 'h1', 'body must open with an H1');
-  else if (/\band\b/i.test(h1)) fail(rel, 'h1', 'H1 must not contain "and" (split into separate rules)');
+  else if (/\band\b/i.test(h1))
+    fail(rel, 'h1', 'H1 must not contain "and" (split into separate rules)');
 
   if (!paragraph) fail(rel, 'ears', 'missing first paragraph after H1');
   else {
@@ -162,7 +162,6 @@ function main() {
 
   for (const abs of sources) {
     const rel = path.relative(ROOT, abs);
-    const base = path.basename(abs);
     checkFile(abs, rel, { allowPlaceholderDescription: false });
   }
 

@@ -1,6 +1,12 @@
 import path from 'node:path';
 import { loadConfig } from '../config.mjs';
-import { checkPathsFromConfig, pathIsProtected, DEFAULT_CHECK_PATHS } from '../checks/check-integrity.mjs';
+import {
+  checkPathsFromConfig,
+  pathIsProtected,
+  pathCoveredByRecord,
+  DEFAULT_CHECK_PATHS,
+} from '../checks/check-integrity.mjs';
+import { readSession } from '../accounting.mjs';
 
 const WRITE_TOOLS = new Set([
   'write',
@@ -55,7 +61,9 @@ export function preTool(root, payload) {
       reasons.push('refused: push requires an explicit developer instruction in this session');
     }
     if (/\bgh\s+pr\s+create\b/.test(command) && !payload.explicitShipInstruction) {
-      reasons.push('refused: pull request requires an explicit developer instruction in this session');
+      reasons.push(
+        'refused: pull request requires an explicit developer instruction in this session',
+      );
     }
     if (
       /\b(terraform\s+apply|pulumi\s+up|fly\s+deploy|kubectl\s+apply)\b/.test(command) &&
@@ -72,12 +80,13 @@ export function preTool(root, payload) {
 
     if (rel.startsWith('..') || path.isAbsolute(rel)) {
       reasons.push(`refused: write outside tree (${filePath})`);
-    } else if (pathIsProtected(rel, loadCheckPaths(root))) {
-      if (!payload.explicitCheckEdit) {
-        reasons.push(
-          `refused: ${rel} is a protected check path. An explicit developer instruction is required (explicitCheckEdit).`,
-        );
-      }
+    } else if (
+      pathIsProtected(rel, loadCheckPaths(root)) &&
+      !pathCoveredByRecord(rel, readSession(root), loadCheckPaths(root))
+    ) {
+      reasons.push(
+        `refused: ${rel} is a protected check path. Record explicitCheckEdit with ./verify.sh --allow-check-edit.`,
+      );
     } else if (isGeneratedAdapterPath(rel)) {
       // Always allow hooks.json so a wedged adapter can be cleared without leaving the IDE.
       if (rel.endsWith('hooks.json') || rel.endsWith('hooks.env.md')) {
@@ -122,11 +131,11 @@ function loadCheckPaths(root) {
 
 function isShellTool(toolKey, command) {
   if (command) return true;
-  return toolKey === 'shell' || toolKey === 'bash' || toolKey === 'terminal' || toolKey.includes('shell');
+  return (
+    toolKey === 'shell' || toolKey === 'bash' || toolKey === 'terminal' || toolKey.includes('shell')
+  );
 }
 
 function isGeneratedAdapterPath(rel) {
-  return (
-    rel.startsWith('.cursor/') || rel.startsWith('.claude/')
-  );
+  return rel.startsWith('.cursor/') || rel.startsWith('.claude/');
 }

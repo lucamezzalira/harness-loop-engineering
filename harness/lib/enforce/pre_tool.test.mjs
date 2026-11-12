@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { preTool } from './pre_tool.mjs';
 
 const root = '/repo';
@@ -61,14 +64,32 @@ test('A-07 refuses a write on a protected check path without explicitCheckEdit',
     tool_input: { path: '/repo/harness/sensors/checks/unit.sh', contents: 'echo\n' },
   });
   assert.equal(denied.allow, false);
-  assert.match(denied.reason || denied.reasons?.join('\n') || JSON.stringify(denied), /explicitCheckEdit/);
+  assert.match(
+    denied.reason || denied.reasons?.join('\n') || JSON.stringify(denied),
+    /explicitCheckEdit/,
+  );
 
-  const allowed = preTool(root, {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-check-edit-'));
+  fs.mkdirSync(path.join(tmp, 'harness', 'state'), { recursive: true });
+  fs.writeFileSync(
+    path.join(tmp, 'harness', 'state', 'session.json'),
+    JSON.stringify({
+      id: 's',
+      explicitCheckEdit: {
+        paths: ['all'],
+        reason: 'developer instruction',
+        at: new Date().toISOString(),
+        by: 'developer',
+        sessionId: 's',
+      },
+    }),
+  );
+  const allowed = preTool(tmp, {
     tool_name: 'Write',
-    tool_input: { path: '/repo/harness/sensors/checks/unit.sh', contents: 'echo\n' },
-    explicitCheckEdit: true,
+    tool_input: { path: path.join(tmp, 'harness/sensors/checks/unit.sh'), contents: 'echo\n' },
   });
   assert.equal(allowed.allow, true);
+  fs.rmSync(tmp, { recursive: true, force: true });
 });
 
 test('A-08 refuses shell commands that skip hooks', () => {

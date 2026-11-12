@@ -1,0 +1,88 @@
+{
+  "entries": [
+    {
+      "id": "A-35",
+      "description": "--allow-check-edit without a TTY exits 2 and writes nothing.",
+      "passes": true,
+      "test": "harness/lib/enforce/allow-check-edit.test.mjs"
+    },
+    {
+      "id": "A-36",
+      "description": "With a simulated TTY and paths harness.yaml, a write to harness.yaml is allowed and a write to harness/sensors/checks/unit.sh is refused.",
+      "passes": true,
+      "test": "harness/lib/enforce/allow-check-edit.test.mjs"
+    },
+    {
+      "id": "A-37",
+      "description": "check-integrity passes a diff touching only recorded paths, and fails when an unrecorded protected path is also in the diff.",
+      "passes": true,
+      "test": "harness/lib/enforce/allow-check-edit.test.mjs"
+    },
+    {
+      "id": "A-38",
+      "description": "An expired record (older than 12 hours, or from a previous session ID) is ignored.",
+      "passes": true,
+      "test": "harness/lib/enforce/allow-check-edit.test.mjs"
+    },
+    {
+      "id": "A-39",
+      "description": "The authorisation shows up in --report and in the retro's deterministic section.",
+      "passes": true,
+      "test": "harness/lib/enforce/allow-check-edit.test.mjs"
+    },
+    {
+      "id": "A-40",
+      "description": "A triage fixture that discards 2 of 5 reviewer findings yields dismissedByRole.reviewer = 2 and a dismissed rate of 40%.",
+      "passes": true,
+      "test": "harness/lib/panel/backlog-triage.test.mjs"
+    },
+    {
+      "id": "A-41",
+      "description": "A finding that disappears after its file changed is classified fixed. One that disappears with no change to its file stays open.",
+      "passes": true,
+      "test": "harness/lib/panel/outcomes.test.mjs"
+    },
+    {
+      "id": "A-42",
+      "description": "--backlog without a TTY prints the same output as before this change, locked in by a snapshot test.",
+      "passes": true,
+      "test": "harness/lib/panel/backlog-triage.test.mjs"
+    },
+    {
+      "id": "A-43",
+      "description": "The loop entry point marks an auth unit needs-human, runs the next unit to completion, and writes a Needs human handoff entry.",
+      "passes": true,
+      "test": "harness/lib/plan/loop-human.test.mjs"
+    },
+    {
+      "id": "A-44",
+      "description": "--status prints the effective humanRequired.paths, and a local override changes it.",
+      "passes": true,
+      "test": "harness/lib/cli-status.test.mjs"
+    },
+    {
+      "id": "A-45",
+      "description": "The README section on paths that need a person explains the default, why harness/** is in it, and how to override it locally.",
+      "passes": true,
+      "test": "harness/lib/cli-status.test.mjs"
+    },
+    {
+      "id": "A-46",
+      "description": "After npm install, format, lint and types report pass or warn, not skipped.",
+      "passes": true,
+      "test": "harness/lib/checks/course-gates.test.mjs"
+    },
+    {
+      "id": "A-47",
+      "description": "The Stryker integration test finds at least one survivor, and the finding lands in report.json.",
+      "passes": true,
+      "test": "harness/lib/checks/stryker-survivor.test.mjs"
+    },
+    {
+      "id": "A-48",
+      "description": "Each tier's summary lists the skipped sensors by name.",
+      "passes": true,
+      "test": "harness/lib/checks/course-gates.test.mjs"
+    }
+  ]
+}

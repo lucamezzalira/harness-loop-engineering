@@ -194,7 +194,8 @@ function main() {
   syncSupersededBy(rows, !CHECK);
   const md = renderReadme(rows);
   if (CHECK) {
-    if (!fs.existsSync(OUT)) fail('docs/adr/README.md missing; run: node scripts/build-adr-index.mjs');
+    if (!fs.existsSync(OUT))
+      fail('docs/adr/README.md missing; run: node scripts/build-adr-index.mjs');
     const committed = fs.readFileSync(OUT, 'utf8');
     if (committed !== md) {
       fail(

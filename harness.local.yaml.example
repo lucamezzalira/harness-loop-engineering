@@ -22,3 +22,16 @@ loop:
   maxTurns: 20
   maxSeconds: 1800
   maxCostUsd: 5.0
+
+# Working on this harness repo: drop harness/** or every loop unit that
+# touches the harness ends needs-human. Arrays replace, they do not append.
+# A consuming repo should keep the shared default, which includes harness/**.
+# review:
+#   humanRequired:
+#     paths:
+#       - '**/auth/**'
+#       - '**/payments/**'
+#       - '**/migrations/**'
+#       - 'infra/**'
+#       - 'terraform/**'
+#       - '.github/workflows/**'

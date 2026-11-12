@@ -76,7 +76,9 @@ test('A-17 nothing-to-do exits 0 and an empty done loop exits 1', async () => {
   fs.writeFileSync(
     path.join(done, 'harness', 'state', 'plan.json'),
     JSON.stringify({
-      units: [{ id: 'U1', title: 'done', touches: ['specs/demo'], acceptance: [], estimatedTurns: 1 }],
+      units: [
+        { id: 'U1', title: 'done', touches: ['specs/demo'], acceptance: [], estimatedTurns: 1 },
+      ],
       waves: [['U1']],
     }) + '\n',
   );
@@ -105,7 +107,9 @@ test('A-17 nothing-to-do exits 0 and an empty done loop exits 1', async () => {
     fs.writeFileSync(
       path.join(emptyDone, 'harness', 'state', 'plan.json'),
       JSON.stringify({
-        units: [{ id: 'U1', title: 'done', touches: ['specs/demo'], acceptance: [], estimatedTurns: 1 }],
+        units: [
+          { id: 'U1', title: 'done', touches: ['specs/demo'], acceptance: [], estimatedTurns: 1 },
+        ],
         waves: [['U1']],
       }) + '\n',
     );

@@ -6,7 +6,11 @@ Static boundary rules miss HTTP coupling: no import, no depcruise hit.
 2. Export a call graph to `harness/state/traces/calls.json`:
 
 ```json
-{ "edges": [{ "from": "services/orders", "to": "services/billing", "via": "http", "inImportGraph": false }] }
+{
+  "edges": [
+    { "from": "services/orders", "to": "services/billing", "via": "http", "inImportGraph": false }
+  ]
+}
 ```
 
 3. Run `./verify.sh` with tier `manual` or invoke the `runtime-drift` check via a custom run.

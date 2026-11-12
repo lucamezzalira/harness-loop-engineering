@@ -16,10 +16,7 @@ test('default cursor adapter wires exactly four portable events', async () => {
   config.hooks = { enable: true, failClosed: false };
   const events = listWiredEvents('cursor', config);
   assert.equal(events.length, 4);
-  assert.deepEqual(
-    events.map((e) => e.event).sort(),
-    [...PORTABLE_EVENTS].sort(),
-  );
+  assert.deepEqual(events.map((e) => e.event).sort(), [...PORTABLE_EVENTS].sort());
   assert.ok(!events.some((e) => /mcp/i.test(e.event)));
 });
 

@@ -20,11 +20,7 @@ function matchGlob(text, pattern) {
   let starPat = -1;
 
   while (ti < text.length) {
-    if (
-      pi < pattern.length &&
-      pattern[pi] === '*' &&
-      pattern[pi + 1] === '*'
-    ) {
+    if (pi < pattern.length && pattern[pi] === '*' && pattern[pi + 1] === '*') {
       // ** or **/
       const slashAfter = pattern[pi + 2] === '/';
       starPat = pi;

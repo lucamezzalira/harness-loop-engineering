@@ -1,6 +1,6 @@
 ---
 name: integrity-checker
-description: "Use proactively after any change. Detects weakened checks: deleted or skipped tests, loosened assertions, edited sensors or config, new suppressions. Never edits."
+description: 'Use proactively after any change. Detects weakened checks: deleted or skipped tests, loosened assertions, edited sensors or config, new suppressions. Never edits.'
 tier: deep
 tools: [read]
 ---

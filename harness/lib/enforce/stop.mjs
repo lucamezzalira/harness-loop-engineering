@@ -5,6 +5,7 @@ import { runPanel } from '../panel/dispatch.mjs';
 import { computeTreeHash } from '../tree-hash.mjs';
 import { appendHandoff } from '../plan/handoff.mjs';
 import { readSession, writeSession } from '../accounting.mjs';
+import { adoptPanelSession } from '../panel/outcomes.mjs';
 
 /** Turn-level panel retries; ignore legacy per-unit object stored on panelCycles. */
 export function turnPanelCycleCount(session) {
@@ -80,6 +81,7 @@ export async function stopSequence(root, config, opts = {}) {
     }
   }
 
+  if (panel) adoptPanelSession(root, session);
   if (panel?.blocking?.length) {
     session.panelCycles = turnPanelCycleCount(session) + 1;
     writeSession(root, session);

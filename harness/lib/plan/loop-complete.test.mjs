@@ -100,14 +100,8 @@ test('pathMatchesTouch and harness/state noise helpers', () => {
 
 test('serialFallbackReason matches worktree outcome', () => {
   const merged = new Set();
-  assert.match(
-    serialFallbackReason('U1', { U1: 'invoke-failed' }, merged, {}),
-    /invoke failed/,
-  );
-  assert.match(
-    serialFallbackReason('U2', { U2: 'no-changes' }, merged, {}),
-    /produced no changes/,
-  );
+  assert.match(serialFallbackReason('U1', { U1: 'invoke-failed' }, merged, {}), /invoke failed/);
+  assert.match(serialFallbackReason('U2', { U2: 'no-changes' }, merged, {}), /produced no changes/);
   assert.match(
     serialFallbackReason('U3', { U3: 'worktree-done' }, merged, {}),
     /no mergeable changes/,
@@ -199,14 +193,8 @@ test('shouldStallUnit waits for stall limit when evidence exists but unit never 
 
 test('shouldResumeLoop skips unclosable units', () => {
   const plan = { units: [{ id: 'U1' }, { id: 'U2' }] };
-  assert.equal(
-    shouldResumeLoop(plan, { unitStatus: { U1: 'complete', U2: 'unclosable' } }),
-    false,
-  );
-  assert.equal(
-    shouldResumeLoop(plan, { unitStatus: { U1: 'complete', U2: 'incomplete' } }),
-    true,
-  );
+  assert.equal(shouldResumeLoop(plan, { unitStatus: { U1: 'complete', U2: 'unclosable' } }), false);
+  assert.equal(shouldResumeLoop(plan, { unitStatus: { U1: 'complete', U2: 'incomplete' } }), true);
   assert.equal(
     shouldResumeLoop(plan, {
       stopReason: 'ship-panel-blocking',
