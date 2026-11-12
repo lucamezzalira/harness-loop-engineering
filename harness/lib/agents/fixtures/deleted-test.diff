@@ -1,0 +1,11 @@
+diff --git a/services/orders/charge.test.mjs b/services/orders/charge.test.mjs
+deleted file mode 100644
+index abcdef0..0000000
+--- a/services/orders/charge.test.mjs
++++ /dev/null
+@@ -1,4 +0,0 @@
+-import test from 'node:test';
+-import assert from 'node:assert/strict';
+-test('charges once', () => {
+-  assert.equal(1, 1);
+-});

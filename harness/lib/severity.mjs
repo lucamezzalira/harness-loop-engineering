@@ -14,6 +14,7 @@ export const DEFAULT_SEVERITY_CATEGORIES = Object.freeze({
   'pii-in-logs': 'P0',
   'boundary-violation': 'P0',
   'contract-breaking': 'P0',
+  'check-weakened': 'P0',
   'acceptance-unmet': 'P1',
   'missing-idempotency': 'P1',
   'error-swallowed': 'P1',

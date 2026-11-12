@@ -59,6 +59,9 @@ export async function invokeFake(opts) {
   if (role === 'planner' || /decompos/i.test(opts.userPrompt || '')) {
     data = PLAN_JSON;
     text = JSON.stringify(data);
+  } else if (role === 'integrity-checker') {
+    data = integrityVerdict(opts.systemPrompt, opts.userPrompt);
+    text = JSON.stringify(data);
   } else {
     data = [];
     text = '[]';
@@ -76,4 +79,38 @@ export async function invokeFake(opts) {
     estimated: Boolean(noUsage || usage.estimated),
     path: 'fake',
   };
+}
+
+/**
+ * The integrity-checker prompt names `check-weakened`. A fixture diff that
+ * deletes a test file is that category. Anything else is a pass.
+ */
+function integrityVerdict(systemPrompt, userPrompt) {
+  const knows = /check-weakened/.test(systemPrompt || '');
+  const file = knows ? deletedTestPath(userPrompt) : null;
+  if (!file) return { verdict: 'PASS', findings: [] };
+  return {
+    verdict: 'FAIL',
+    findings: [
+      {
+        category: 'check-weakened',
+        file,
+        line: 1,
+        message: 'test file removed',
+      },
+    ],
+  };
+}
+
+function deletedTestPath(diff) {
+  const chunks = String(diff || '').split(/^diff --git /m).slice(1);
+  for (const chunk of chunks) {
+    const header = chunk.split('\n')[0] || '';
+    const match = header.match(/^a\/(\S+)/);
+    if (!match) continue;
+    const file = match[1];
+    if (!/\.test\.(?:mjs|js|cjs|ts|tsx)$/.test(file)) continue;
+    if (/^deleted file mode /m.test(chunk)) return file;
+  }
+  return null;
 }
