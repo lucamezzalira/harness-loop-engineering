@@ -62,6 +62,14 @@ export async function invokeFake(opts) {
   } else if (role === 'integrity-checker') {
     data = integrityVerdict(opts.systemPrompt, opts.userPrompt);
     text = JSON.stringify(data);
+  } else if (/Harness retro/i.test(`${opts.systemPrompt || ''}\n${opts.userPrompt || ''}`)) {
+    text = [
+      '1. Add a format guidance line. Evidence: format failed twice.',
+      '2. Tighten the stall note. Evidence: one stall.',
+      '3. Record needs-human in the handoff template. Evidence: one needs-human unit.',
+      '4. This fourth item must be dropped.',
+    ].join('\n');
+    data = text;
   } else {
     data = [];
     text = '[]';

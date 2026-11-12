@@ -76,11 +76,11 @@ export async function runInstall(root) {
       const err = new Error(
         [
           'Non-interactive --install cannot choose a tool.',
-          'Found: no .cursor/, .claude/, or .codex/ directory.',
+          'Found: no .cursor/ or .claude/ directory.',
           'Why: adapters are mutual exclusive; only one tool may be wired.',
           'Create harness.local.yaml with:',
           '',
-          'tool: cursor   # or claude | codex',
+          'tool: cursor   # or claude',
           'profile: default',
           '',
         ].join('\n'),
@@ -148,7 +148,36 @@ export async function runInstall(root) {
     console.log('\nNon-interactive: install finished without waiting.');
   }
 
-  return { exitCode: 0, tool, report, audit };
+  const codeowners = await offerCodeowners(root, config);
+
+  return { exitCode: 0, tool, report, audit, codeowners };
+}
+
+export function writeCodeownersIfAbsent(root, entries) {
+  const file = path.join(root, '.github', 'CODEOWNERS');
+  if (fs.existsSync(file)) return { wrote: false, reason: 'exists' };
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const body = entries.map((entry) => `${entry.path} ${entry.owner}`).join('\n') + '\n';
+  fs.writeFileSync(file, body);
+  return { wrote: true, count: entries.length, file };
+}
+
+export async function offerCodeowners(root, config) {
+  if (!isTTY()) return { wrote: false, reason: 'non-tty' };
+  const paths = config?.review?.humanRequired?.paths || [];
+  const entries = [];
+  for (const pattern of paths) {
+    const owner = (
+      await prompt(`CODEOWNERS owner for ${pattern}? (empty skips) `, {
+        defaultAnswer: '',
+        nonInteractive: '',
+      })
+    ).trim();
+    if (!owner) continue;
+    entries.push({ path: pattern, owner });
+  }
+  if (!entries.length) return { wrote: false, reason: 'no owners' };
+  return writeCodeownersIfAbsent(root, entries);
 }
 
 function detectProject(root) {

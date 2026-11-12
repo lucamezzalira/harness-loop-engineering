@@ -9,7 +9,7 @@ import { loadConfig } from '../config.mjs';
 import { renderAdapter, renderRoleForTool } from './render.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const TOOLS = ['cursor', 'claude', 'codex'];
+const TOOLS = ['cursor', 'claude'];
 const WRITE_TOOLS = ['Edit', 'Write', 'Bash'];
 
 function parseFrontmatter(text) {
@@ -54,7 +54,7 @@ test('A-01 rendered role files start with frontmatter name and description', asy
       cfg.tool = tool;
       cfg.hooks = { enable: true };
       await renderAdapter(tmp, cfg);
-      const dirName = tool === 'cursor' ? '.cursor' : tool === 'claude' ? '.claude' : '.codex';
+      const dirName = tool === 'cursor' ? '.cursor' : '.claude';
       const agents = path.join(tmp, dirName, 'agents');
       const files = fs.readdirSync(agents).filter((name) => name.endsWith('.md'));
       assert.ok(files.length >= 5, `${tool} rendered roles`);

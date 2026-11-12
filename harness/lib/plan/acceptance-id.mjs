@@ -1,13 +1,13 @@
 /**
  * Normalize planner/PRD acceptance refs to bare ids ("A-01").
- * Accepts "A-01", "a-01", "A-01: description…".
+ * Accepts "A-01", "a-01", "A-01: description…", and "ESC-01".
  * @param {unknown} raw
  * @returns {string}
  */
 export function normalizeAcceptanceId(raw) {
   const s = String(raw || '').trim();
   if (!s) return '';
-  const m = s.match(/\b(A-\d+)\b/i);
+  const m = s.match(/\b((?:A|ESC)-\d+)\b/i);
   if (m) return m[1].toUpperCase();
   return s;
 }

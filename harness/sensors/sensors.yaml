@@ -118,6 +118,13 @@ sensors:
     enabled: true
     missing: n/a
 
+  - name: check-integrity
+    tier: turn
+    where: [local, ci]
+    blocking: true
+    enabled: true
+    missing: n/a
+
   - name: rule-shape
     tier: turn
     where: [local, ci]
@@ -142,7 +149,7 @@ sensors:
   - name: audit
     tier: commit
     where: [ci]
-    blocking: false
+    blocking: true
     enabled: true
     missing: skip
 

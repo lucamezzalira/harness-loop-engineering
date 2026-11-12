@@ -3,7 +3,8 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { resolveRoleBinding } from '../config.mjs';
 import { invokeRole, loadRoleFile } from '../agents/invoke.mjs';
-import { mergeFindings, partitionByPolicy, renderReviewTable } from './merge.mjs';
+import { mergeFindings, renderReviewTable } from './merge.mjs';
+import { reviewMode, routeFindings } from './trust.mjs';
 import { appendBacklog, promoteRecurring } from './backlog.mjs';
 import { minimatchLike } from '../util/glob.mjs';
 
@@ -81,7 +82,7 @@ export async function runPanel(root, config, opts = {}) {
   });
 
   const diffText = getDiffSince(root, opts.sinceHash);
-  const findings = [];
+  const findingsByRole = new Map();
   const roleResults = await Promise.all(
     roles.map(async (role) => {
       const binding = resolveRoleBinding(config, role);
@@ -99,24 +100,31 @@ export async function runPanel(root, config, opts = {}) {
       });
       if (!result.ok) return { role, ok: false, error: result.error, usage: result.usage };
       const arr = findingsFromRoleOutput(result.data);
-      for (const item of arr) {
-        findings.push({ ...item, role });
-      }
+      const tagged = arr.map((item) => ({ ...item, role }));
+      findingsByRole.set(role, tagged);
       return { role, ok: true, count: arr.length, usage: result.usage };
     }),
   );
 
-  const merged = mergeFindings(findings, config.severity);
-  const { blocking, backlogged } = partitionByPolicy(
-    merged,
-    config.review?.blockAt || ['P0', 'P1'],
-  );
+  const blockAt = config.review?.blockAt || ['P0', 'P1'];
+  const blocking = [];
+  const backlogged = [];
+  const shadow = [];
+  for (const role of roles) {
+    const raw = findingsByRole.get(role) || [];
+    const mergedRole = mergeFindings(raw, config.severity);
+    const routed = routeFindings(mergedRole, reviewMode(config, role), blockAt);
+    blocking.push(...routed.blocking);
+    backlogged.push(...routed.backlogged);
+    shadow.push(...routed.shadow);
+  }
   appendBacklog(root, config, backlogged, opts.unitId);
   promoteRecurring(root, config);
 
   const table = renderReviewTable({
     blocking,
     backlogged,
+    shadow,
     unitId: opts.unitId || '-',
     cycle: opts.cycle || 1,
     diffRange: opts.diffRange || `${opts.sinceHash || '?'}..HEAD`,
@@ -126,7 +134,8 @@ export async function runPanel(root, config, opts = {}) {
   fs.mkdirSync(stateDir, { recursive: true });
   fs.writeFileSync(path.join(stateDir, 'review.md'), table);
 
-  return { roles, roleResults, merged, blocking, backlogged, table };
+  const merged = [...blocking, ...backlogged, ...shadow];
+  return { roles, roleResults, merged, blocking, backlogged, shadow, table };
 }
 
 /**

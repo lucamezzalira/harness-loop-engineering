@@ -19,6 +19,7 @@ export const DEFAULT_SEVERITY_CATEGORIES = Object.freeze({
   'missing-idempotency': 'P1',
   'error-swallowed': 'P1',
   duplication: 'P2',
+  'mutant-survived': 'P2',
   naming: 'P3',
   style: 'P3',
 });

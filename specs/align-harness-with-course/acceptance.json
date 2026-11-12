@@ -35,6 +35,174 @@
       "description": "A fixture diff that deletes a test makes the integrity-checker prompt fixture expect check-weakened.",
       "passes": true,
       "test": "harness/lib/agents/fake-provider.test.mjs"
+    },
+    {
+      "id": "A-07",
+      "description": "A write on a protected check path is refused unless explicitCheckEdit is set.",
+      "passes": true,
+      "test": "harness/lib/enforce/pre_tool.test.mjs"
+    },
+    {
+      "id": "A-08",
+      "description": "Shell commands that skip hooks are refused.",
+      "passes": true,
+      "test": "harness/lib/enforce/pre_tool.test.mjs"
+    },
+    {
+      "id": "A-09",
+      "description": "check-integrity fails a deleted test, a skipped test, a suppression, or a sensor edit without an instruction record.",
+      "passes": true,
+      "test": "harness/lib/checks/check-integrity.test.mjs"
+    },
+    {
+      "id": "A-10",
+      "description": "check-integrity is a blocking turn sensor for local and ci.",
+      "passes": true,
+      "test": "harness/lib/checks/check-integrity.test.mjs"
+    },
+    {
+      "id": "A-11",
+      "description": "An auth path marks the unit needs-human and the loop moves on.",
+      "passes": true,
+      "test": "harness/lib/review/human-required.test.mjs"
+    },
+    {
+      "id": "A-12",
+      "description": "A DROP TABLE diff sets humanReview required on a passing report.",
+      "passes": true,
+      "test": "harness/lib/review/human-required.test.mjs"
+    },
+    {
+      "id": "A-13",
+      "description": "A required human review cannot be cleared by a later none.",
+      "passes": true,
+      "test": "harness/lib/review/human-required.test.mjs"
+    },
+    {
+      "id": "A-14",
+      "description": "Each finished wave writes a retro with a deterministic section and a proposal section.",
+      "passes": true,
+      "test": "harness/lib/plan/retro.test.mjs"
+    },
+    {
+      "id": "A-15",
+      "description": "The same wave inputs produce the same retro text.",
+      "passes": true,
+      "test": "harness/lib/plan/retro.test.mjs"
+    },
+    {
+      "id": "A-16",
+      "description": "Retro generation writes only under harness/retro.",
+      "passes": true,
+      "test": "harness/lib/plan/retro.test.mjs"
+    },
+    {
+      "id": "A-17",
+      "description": "Missing work exits 0 as nothing-to-do. A done loop with an empty staged diff exits 1.",
+      "passes": true,
+      "test": "harness/lib/plan/loop-idle.test.mjs"
+    },
+    {
+      "id": "A-18",
+      "description": "An empty turn diff reports status no-changes and changes 0.",
+      "passes": true,
+      "test": "harness/lib/checks/runner-empty.test.mjs"
+    },
+    {
+      "id": "A-19",
+      "description": "Three mutation survivors on one line become one mutant-survived finding.",
+      "passes": true,
+      "test": "harness/lib/checks/mutation-survivors.test.mjs"
+    },
+    {
+      "id": "A-20",
+      "description": "Survivor findings are capped at 7 times the changed-file count.",
+      "passes": true,
+      "test": "harness/lib/checks/mutation-survivors.test.mjs"
+    },
+    {
+      "id": "A-21",
+      "description": "The mutation sensor stays non-blocking and ci-only unless mutation.local is true.",
+      "passes": true,
+      "test": "harness/lib/checks/mutation-survivors.test.mjs"
+    },
+    {
+      "id": "A-22",
+      "description": "A search for the retired host name finds only the two historical ADRs.",
+      "passes": true,
+      "test": "harness/lib/config-tools.test.mjs"
+    },
+    {
+      "id": "A-23",
+      "description": "Config that names the retired host exits 2 with the fixed error.",
+      "passes": true,
+      "test": "harness/lib/config-tools.test.mjs"
+    },
+    {
+      "id": "A-24",
+      "description": "CI still runs npm test and verify.sh.",
+      "passes": true,
+      "test": "harness/lib/config-tools.test.mjs"
+    },
+    {
+      "id": "A-25",
+      "description": "fix-an-escape interviews, proves a regression, and records ESC-NN.",
+      "passes": true,
+      "test": "harness/lib/skills-interview.test.mjs"
+    },
+    {
+      "id": "A-26",
+      "description": "Acceptance ids accept ESC-NN beside A-NN.",
+      "passes": true,
+      "test": "harness/lib/plan/acceptance-id.test.mjs"
+    },
+    {
+      "id": "A-27",
+      "description": "The review report lists findings, outcomes, cycles, needs-human, unclosable, and check refusals.",
+      "passes": true,
+      "test": "harness/lib/accounting-review.test.mjs"
+    },
+    {
+      "id": "A-28",
+      "description": "Inferred review outcomes are marked estimated. Escape rate stays out of scope.",
+      "passes": true,
+      "test": "harness/lib/accounting-review.test.mjs"
+    },
+    {
+      "id": "A-29",
+      "description": "The same P1 finding blocks, is backlogged, or is shadow-only depending on review mode.",
+      "passes": true,
+      "test": "harness/lib/panel/trust.test.mjs"
+    },
+    {
+      "id": "A-30",
+      "description": "Existing roles default to blocking. An unlisted role defaults to shadow.",
+      "passes": true,
+      "test": "harness/lib/panel/trust.test.mjs"
+    },
+    {
+      "id": "A-31",
+      "description": "The audit sensor is blocking, stays CI-only, and fails a high advisory fixture.",
+      "passes": true,
+      "test": "harness/lib/checks/audit-blocking.test.mjs"
+    },
+    {
+      "id": "A-32",
+      "description": "PRD, ADR, endpoint, and consumer skills interview one question at a time before writing.",
+      "passes": true,
+      "test": "harness/lib/skills-interview.test.mjs"
+    },
+    {
+      "id": "A-33",
+      "description": "Rewritten skill bodies stay under 500 lines.",
+      "passes": true,
+      "test": "harness/lib/skills-interview.test.mjs"
+    },
+    {
+      "id": "A-34",
+      "description": "Every course-map link resolves, and failure modes cover silent no-op, check edits, and human-required paths.",
+      "passes": true,
+      "test": "harness/lib/course-map.test.mjs"
     }
   ]
 }

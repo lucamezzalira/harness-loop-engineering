@@ -5,8 +5,8 @@ alwaysApply: true
 
 # Adapters only via render
 
-When agent or human edits would change files under `.cursor/`, `.claude/`, or
-`.codex/`, the system shall leave those trees to `./verify.sh --render`, because
+When agent or human edits would change files under `.cursor/` or `.claude/`,
+the system shall leave those trees to `./verify.sh --render`, because
 hand-edited adapters drift from `harness/render/` and the next render overwrites
 or fights the change.
 
