@@ -1,3 +1,21 @@
+export function findingTotalsFromSession(session = {}) {
+  const out = {};
+  for (const finding of session.reviewFindings || []) {
+    const role = finding.role || '?';
+    const row = out[role] || { total: 0, fixed: 0, dismissed: 0 };
+    row.total += 1;
+    if (finding.outcome === 'fixed') row.fixed += 1;
+    if (finding.outcome === 'dismissed') row.dismissed += 1;
+    out[role] = row;
+  }
+  for (const [role, n] of Object.entries(session.dismissedByRole || {})) {
+    const row = out[role] || { total: 0, fixed: 0, dismissed: 0 };
+    row.dismissed = Math.max(row.dismissed, Number(n) || 0);
+    out[role] = row;
+  }
+  return out;
+}
+
 export function classifyOutcome(finding) {
   if (!finding) return 'open';
   if (finding.fixed === true || finding.outcome === 'fixed') return 'fixed';
@@ -25,9 +43,7 @@ export function renderReviewMetrics(session = {}, extras = {}) {
   for (const finding of findings) {
     const outcome = classifyOutcome(finding);
     const tag = outcome === 'open' ? ' (estimated)' : '';
-    lines.push(
-      `  ${finding.role || '?'}/${finding.category || '?'}: ${outcome}${tag}`,
-    );
+    lines.push(`  ${finding.role || '?'}/${finding.category || '?'}: ${outcome}${tag}`);
   }
   lines.push('panel cycles:');
   const cycles = session.panelCycles || {};
@@ -48,5 +64,16 @@ export function renderReviewMetrics(session = {}, extras = {}) {
     lines.push('revert rate: 0 (estimated)');
   }
   lines.push('escape rate: out of scope');
+  lines.push('by role:');
+  const totals = findingTotalsFromSession(session);
+  const roles = Object.keys(totals).sort();
+  if (!roles.length) lines.push('  (none)');
+  for (const role of roles) {
+    const row = totals[role];
+    const rate = row.total ? Math.round((row.dismissed / row.total) * 100) : 0;
+    lines.push(
+      `  ${role}: total ${row.total}, fixed ${row.fixed}, dismissed ${row.dismissed}, dismissed rate ${rate}%`,
+    );
+  }
   return lines.join('\n');
 }

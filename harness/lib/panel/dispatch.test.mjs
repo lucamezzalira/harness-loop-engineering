@@ -74,9 +74,7 @@ test('unit cadence includes the checker roles', () => {
 test('checker verdict objects become panel findings', () => {
   const weakened = findingsFromRoleOutput({
     verdict: 'FAIL',
-    findings: [
-      { category: 'check-weakened', file: 'a.test.mjs', line: 1, message: 'removed' },
-    ],
+    findings: [{ category: 'check-weakened', file: 'a.test.mjs', line: 1, message: 'removed' }],
   });
   assert.equal(weakened[0].category, 'check-weakened');
 

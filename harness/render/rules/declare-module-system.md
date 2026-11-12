@@ -1,8 +1,8 @@
 ---
 description: Ensures each package states ESM or CJS explicitly and stays consistent
 globs:
-  - "**/package.json"
-  - "**/*.{js,mjs,cjs}"
+  - '**/package.json'
+  - '**/*.{js,mjs,cjs}'
 alwaysApply: false
 ---
 

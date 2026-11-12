@@ -15,7 +15,10 @@ test('A-19 three survivors on one line become one finding', () => {
     line: 12,
     mutatorName: `m${n}`,
   }));
-  const findings = survivorsToFindings({ mutants }, { changedFiles: ['services/billing/charge.js'] });
+  const findings = survivorsToFindings(
+    { mutants },
+    { changedFiles: ['services/billing/charge.js'] },
+  );
   assert.equal(findings.length, 1);
   assert.equal(findings[0].category, 'mutant-survived');
   assert.equal(findings[0].severity, 'P2');

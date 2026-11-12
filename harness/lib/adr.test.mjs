@@ -48,7 +48,10 @@ test('render emits ADR consult rule for cursor', async () => {
   try {
     fs.cpSync(path.join(ROOT, 'harness'), path.join(tmp, 'harness'), { recursive: true });
     fs.writeFileSync(path.join(tmp, 'verify.sh'), '#!/bin/bash\n', { mode: 0o755 });
-    fs.writeFileSync(path.join(tmp, 'harness.yaml'), fs.readFileSync(path.join(ROOT, 'harness.yaml')));
+    fs.writeFileSync(
+      path.join(tmp, 'harness.yaml'),
+      fs.readFileSync(path.join(ROOT, 'harness.yaml')),
+    );
     fs.writeFileSync(path.join(tmp, 'AGENTS.md'), '# x\n');
     fs.writeFileSync(
       path.join(tmp, 'harness.local.yaml'),
@@ -57,12 +60,7 @@ test('render emits ADR consult rule for cursor', async () => {
     const config = loadConfig(tmp);
     config.tool = 'cursor';
     await renderAdapter(tmp, config);
-    const rule = path.join(
-      tmp,
-      '.cursor',
-      'rules',
-      'consult-adr-before-architectural-change.mdc',
-    );
+    const rule = path.join(tmp, '.cursor', 'rules', 'consult-adr-before-architectural-change.mdc');
     assert.ok(fs.existsSync(rule), 'missing cursor rule');
     const body = fs.readFileSync(rule, 'utf8');
     assert.ok(body.includes('globs:'));

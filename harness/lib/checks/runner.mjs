@@ -3,13 +3,12 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { computeTreeHash } from '../tree-hash.mjs';
 import { writeReport } from '../report.mjs';
+import { loadSensors, wrapWithGuidance, changedFiles, resolveHarnessEnv } from './common.mjs';
 import {
-  loadSensors,
-  wrapWithGuidance,
-  changedFiles,
-  resolveHarnessEnv,
-} from './common.mjs';
-import { matchHumanRequired, annotateReport, collectHumanInputs } from '../review/human-required.mjs';
+  matchHumanRequired,
+  annotateReport,
+  collectHumanInputs,
+} from '../review/human-required.mjs';
 import { survivorsToFindings, mutationWhere } from './mutation-survivors.mjs';
 import { appendBacklog } from '../panel/backlog.mjs';
 
@@ -270,6 +269,12 @@ export function reportExitCode(report) {
  * @param {object} report
  * @param {{ log?: (s: string) => void }} [opts]
  */
+export function skippedToolLine(report) {
+  const names = (report?.checks || []).filter((c) => c.status === 'skipped').map((c) => c.name);
+  if (!names.length) return '';
+  return `skipped (tool missing): ${names.join(', ')}`;
+}
+
 export function printWhereSummary(report, opts = {}) {
   const log = opts.log || console.log;
   const deferred = report.deferredToCi || [];
@@ -283,5 +288,10 @@ export function printWhereSummary(report, opts = {}) {
     log('');
     log(`Skipped (local-only, ${skipped.length} sensor${skipped.length === 1 ? '' : 's'}):`);
     log(`  ${skipped.join(', ')}`);
+  }
+  const missing = skippedToolLine(report);
+  if (missing) {
+    log('');
+    log(missing);
   }
 }

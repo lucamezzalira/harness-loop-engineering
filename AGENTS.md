@@ -4,6 +4,7 @@ Reference implementation for a Node harness that renders for Claude and Cursor.
 JavaScript (ESM) on Node 20+, npm.
 
 ## Setup commands
+
 - Install: `npm install`
 - Test: `npm test`
 - Test one file: `node --test path/to/file.test.mjs`
@@ -11,6 +12,7 @@ JavaScript (ESM) on Node 20+, npm.
 - Plan / loop: `./verify.sh --plan` then `./verify.sh --loop`
 
 ## What done means
+
 A change is done when `./verify.sh` exits 0. That means the panel of
 review roles has run at the tier the change requires, no P0 or P1
 findings remain open, and the ship gate still requires an explicit
@@ -18,6 +20,7 @@ developer instruction before commit, push, PR, or deploy. A change that
 only compiles is not done.
 
 ## Project structure
+
 - `harness/` the harness itself; keep it visible, not hidden under a dot
 - `harness/sensors/checks/` thin shell sensors (exit 0/1/2/3; registry owns missing)
 - `harness/roles/` the review roles
@@ -28,6 +31,7 @@ only compiles is not done.
 - `.claude/` and `.cursor/` rendered from harness/render/
 
 ## Architecture
+
 The standing decisions live in `docs/adr/`. Read `docs/adr/README.md`
 first to find the ADRs whose `touches` field matches the paths you are
 about to change, then read those ADRs in full before making the change.
@@ -43,6 +47,7 @@ The short version, for tasks that do not touch architectural boundaries:
 For anything beyond these lines the ADR is the source of truth.
 
 ## Boundaries
+
 - Never edit files under `harness/state/`, it is regenerated per session
 - Never modify an ADR whose status is `accepted`; supersede with a new
   ADR instead

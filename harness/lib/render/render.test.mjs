@@ -25,7 +25,11 @@ function parseFrontmatter(text) {
 
 function toolList(value) {
   if (Array.isArray(value)) return value.map(String);
-  if (typeof value === 'string') return value.split(',').map((s) => s.trim()).filter(Boolean);
+  if (typeof value === 'string')
+    return value
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
   return [];
 }
 

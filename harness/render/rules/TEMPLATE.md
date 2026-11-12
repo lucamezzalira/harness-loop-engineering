@@ -10,9 +10,11 @@
   - ## How to satisfy it: name a helper or show a short snippet (≥20 chars)
   - File under 100 lines; H1 must not contain "and"
 -->
+
 ---
+
 description: Ensures consumers complete each side effect at most once per messageId
-globs: services/*/consumers/**/*.ts
+globs: services/_/consumers/\**/_.ts
 alwaysApply: false
 ---
 

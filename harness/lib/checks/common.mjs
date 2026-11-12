@@ -196,13 +196,11 @@ export function wrapWithGuidance(root, name, toolOutput) {
  * @param {string} content
  */
 export function countExecutableLines(content) {
-  return content
-    .split('\n')
-    .filter((l) => {
-      const t = l.trim();
-      if (!t) return false;
-      if (t.startsWith('#!')) return false;
-      if (t.startsWith('#')) return false;
-      return true;
-    }).length;
+  return content.split('\n').filter((l) => {
+    const t = l.trim();
+    if (!t) return false;
+    if (t.startsWith('#!')) return false;
+    if (t.startsWith('#')) return false;
+    return true;
+  }).length;
 }

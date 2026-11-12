@@ -6,6 +6,8 @@ import { invokeRole, loadRoleFile } from '../agents/invoke.mjs';
 import { mergeFindings, renderReviewTable } from './merge.mjs';
 import { reviewMode, routeFindings } from './trust.mjs';
 import { appendBacklog, promoteRecurring } from './backlog.mjs';
+import { reconcileFindings } from './outcomes.mjs';
+import { readSession, writeSession } from '../accounting.mjs';
 import { minimatchLike } from '../util/glob.mjs';
 
 /**
@@ -135,7 +137,19 @@ export async function runPanel(root, config, opts = {}) {
   fs.writeFileSync(path.join(stateDir, 'review.md'), table);
 
   const merged = [...blocking, ...backlogged, ...shadow];
-  return { roles, roleResults, merged, blocking, backlogged, shadow, table };
+  const session = readSession(root) || { id: 'adhoc', reviewFindings: [] };
+  session.reviewFindings = reconcileFindings(session.reviewFindings || [], merged, diffFiles);
+  writeSession(root, session);
+  return {
+    roles,
+    roleResults,
+    merged,
+    blocking,
+    backlogged,
+    shadow,
+    table,
+    reviewFindings: session.reviewFindings,
+  };
 }
 
 /**

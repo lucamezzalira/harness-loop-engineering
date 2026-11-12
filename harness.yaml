@@ -9,43 +9,43 @@
 # The repo the harness is running against.
 # Only fields the harness cannot infer belong here.
 project:
-  contractsPackage: '@acme/contracts'      # the package agents must not import from outside
-  servicesGlob: 'services/*'               # what counts as a service for boundary checks
-  infraPaths:                              # paths the infra role owns
+  contractsPackage: '@acme/contracts' # the package agents must not import from outside
+  servicesGlob: 'services/*' # what counts as a service for boundary checks
+  infraPaths: # paths the infra role owns
     - 'infra/**'
     - 'terraform/**'
 
 # Which review roles run, and when.
 # A disabled role never runs; enable it when the codebase grows to need it.
 roles:
-  reviewer:     { enabled: true }          # code review, always on
-  planner:      { enabled: true }          # decomposes work into units
-  security:     { enabled: true }          # security review
-  product:      { enabled: true }          # spec conformance
-  test-writer:  { enabled: true }          # test authoring
-  qa:           { enabled: false }         # separate qa role, off until qa team exists
-  infra:        { enabled: false }         # off until infra/ is populated
-  acceptance-checker: { enabled: true }    # grades acceptance claims; read-only
-  integrity-checker:  { enabled: true }    # grades weakened checks; read-only
+  reviewer: { enabled: true } # code review, always on
+  planner: { enabled: true } # decomposes work into units
+  security: { enabled: true } # security review
+  product: { enabled: true } # spec conformance
+  test-writer: { enabled: true } # test authoring
+  qa: { enabled: false } # separate qa role, off until qa team exists
+  infra: { enabled: false } # off until infra/ is populated
+  acceptance-checker: { enabled: true } # grades acceptance claims; read-only
+  integrity-checker: { enabled: true } # grades weakened checks; read-only
 
 # When each role runs during a session.
 # turn = after every agent turn; unit = after a unit completes;
 # wave = after a parallel/serial wave; ship = final panel before staging.
 # Path triggers add a role temporarily when a matching file changed.
 review:
-  maxCycles: 3                              # loops before the panel escalates
-  blockAt: [P0, P1]                         # severities that halt the session
-  requireGreen: true                        # a session cannot end with any P0/P1 open
+  maxCycles: 3 # loops before the panel escalates
+  blockAt: [P0, P1] # severities that halt the session
+  requireGreen: true # a session cannot end with any P0/P1 open
   cadence:
     # Mid-loop: fast. Unit end owns product/security. Wave/ship: specialists.
     turn: [reviewer]
     unit: [security, product, acceptance-checker, integrity-checker]
     wave: [reviewer, security, product, qa]
     ship: [reviewer, security, product, qa]
-  triggers:                                 # extra roles when files match
+  triggers: # extra roles when files match
     security: ['services/**/auth/**', '**/log*.js', '**/*secret*']
-    infra:    ['infra/**', 'terraform/**']
-    product:  ['specs/**']
+    infra: ['infra/**', 'terraform/**']
+    product: ['specs/**']
     performance: ['services/**', 'examples/**', '**/webpack*.{js,cjs,mjs,ts}']
   humanRequired:
     paths:
@@ -101,51 +101,53 @@ mutation:
 # iteration bugs.
 severity:
   categories:
-    secret-exposed:      P0
-    pii-in-logs:         P0
-    boundary-violation:  P0
-    contract-breaking:   P0
-    check-weakened:      P0
-    acceptance-unmet:    P1
+    secret-exposed: P0
+    pii-in-logs: P0
+    boundary-violation: P0
+    contract-breaking: P0
+    check-weakened: P0
+    acceptance-unmet: P1
     missing-idempotency: P1
-    error-swallowed:     P1
-    duplication:         P2
-    naming:              P3
-    style:               P3
-    mutant-survived:     P2
-  default: P2                               # any category not in the map above
+    error-swallowed: P1
+    duplication: P2
+    naming: P3
+    style: P3
+    mutant-survived: P2
+  default: P2 # any category not in the map above
 
 # Backlog behaviour for P2 and P3 findings that did not block.
 backlog:
-  maxItems: 50                              # cap; oldest expire first
-  expireP3Sessions: 3                       # P3 items drop after N sessions
-  promoteAfterUnits: 3                      # recurring category → proposed rule
+  maxItems: 50 # cap; oldest expire first
+  expireP3Sessions: 3 # P3 items drop after N sessions
+  promoteAfterUnits: 3 # recurring category → proposed rule
 
 # Baseline metrics the harness ratchets against.
 # null means "record on next run and use that as the baseline going forward".
 # The ratchet prevents regressions without demanding a target upfront.
 baseline:
-  agentsMdLines:    null
+  agentsMdLines: null
   duplicatedBlocks: null
-  maxComplexity:    null
+  maxComplexity: 76
+  # checkJs reports on the existing JSDoc. The count must not grow.
+  typesErrors: 61
 
 # Runtime behaviour of verify.sh itself.
 verify:
-  failFast: true                            # stop on first P0/P1 finding
-  maxStopRetries: 2                         # attempts before giving up on a stuck run
-  editBudgetMs: 1000                        # debounce for edit-tier runs, in milliseconds
+  failFast: true # stop on first P0/P1 finding
+  maxStopRetries: 2 # attempts before giving up on a stuck run
+  editBudgetMs: 1000 # debounce for edit-tier runs, in milliseconds
 
 # What gets logged and where.
 # Off by default because logs are per-session state, not repo state.
 logs:
   enabled: false
-  level: events                             # events | debug | trace
-  retainSessions: 10                        # oldest sessions expire after N runs
+  level: events # events | debug | trace
+  retainSessions: 10 # oldest sessions expire after N runs
 
 # Hard limits enforced by the harness.
 # The AGENTS.md limit is Anthropic's own recommendation (200 lines).
 # The skill body limit is Anthropic's stated best practice (500 lines,
 # under 5,000 tokens); the 60-line figure that circulates online is wrong.
 limits:
-  agentsMdLines:   200                      # per Anthropic's Claude Code memory docs
-  skillBodyLines:  500                      # per Anthropic's Skill authoring best practices
+  agentsMdLines: 200 # per Anthropic's Claude Code memory docs
+  skillBodyLines: 500 # per Anthropic's Skill authoring best practices

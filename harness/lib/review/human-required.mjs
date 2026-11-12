@@ -24,9 +24,12 @@ export const DEFAULT_HUMAN_PATTERNS = Object.freeze([
 
 export function humanRequiredConfig(config) {
   const spec = config?.review?.humanRequired || {};
-  const paths = Array.isArray(spec.paths) && spec.paths.length ? spec.paths : [...DEFAULT_HUMAN_PATHS];
+  const paths =
+    Array.isArray(spec.paths) && spec.paths.length ? spec.paths : [...DEFAULT_HUMAN_PATHS];
   const patterns =
-    Array.isArray(spec.patterns) && spec.patterns.length ? spec.patterns : [...DEFAULT_HUMAN_PATTERNS];
+    Array.isArray(spec.patterns) && spec.patterns.length
+      ? spec.patterns
+      : [...DEFAULT_HUMAN_PATTERNS];
   return { paths: paths.map(String), patterns: patterns.map(String) };
 }
 
@@ -91,6 +94,26 @@ function patternHits(pattern, text) {
   }
 }
 
+export function filterDiffToFiles(diff, files) {
+  const allow = new Set(files || []);
+  const chunks = [];
+  let current = '';
+  let keep = false;
+  const flush = (line) => {
+    if (keep) chunks.push(line);
+  };
+  for (const line of String(diff || '').split('\n')) {
+    if (line.startsWith('+++ b/')) {
+      current = line.slice(6);
+      keep = allow.has(current);
+      flush(line);
+      continue;
+    }
+    flush(line);
+  }
+  return chunks.join('\n');
+}
+
 export function matchHumanRequired(files, diff, config) {
   const { paths, patterns } = humanRequiredConfig(config);
   const matchedPaths = [];
@@ -120,7 +143,8 @@ export function matchHumanRequired(files, diff, config) {
  */
 export function lockHumanReview(current, attempted) {
   const status = reviewStatus(current);
-  if (status === 'required') return current?.status ? current : { status: 'required', paths: [], patterns: [] };
+  if (status === 'required')
+    return current?.status ? current : { status: 'required', paths: [], patterns: [] };
   if (attempted == null) return current ?? { status: 'none', paths: [], patterns: [] };
   if (typeof attempted === 'string') return { status: attempted, paths: [], patterns: [] };
   return attempted;

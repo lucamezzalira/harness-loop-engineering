@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "target": "ES2022",
+    "skipLibCheck": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "maxNodeModuleJsDepth": 0
+  },
+  "include": ["harness/lib/**/*.mjs", "eslint.config.js"]
+}

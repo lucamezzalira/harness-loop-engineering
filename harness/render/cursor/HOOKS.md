@@ -21,12 +21,12 @@ If changing this, know that agents regain the ability to ship without a green re
 
 ## Events (exactly four)
 
-| Event | Script | Can refuse | failClosed |
-| ----- | ------ | ---------- | ---------- |
-| `sessionStart` | `bash hooks/session-start.sh` | no | false |
-| `beforeShellExecution` | `bash hooks/before-shell.sh` | yes (exit **2**) | `hooks.failClosed` |
-| `afterFileEdit` | `bash hooks/after-edit.sh` | no | false |
-| `stop` | `bash hooks/stop.sh` | soft: `followup_message` | false |
+| Event                  | Script                        | Can refuse               | failClosed         |
+| ---------------------- | ----------------------------- | ------------------------ | ------------------ |
+| `sessionStart`         | `bash hooks/session-start.sh` | no                       | false              |
+| `beforeShellExecution` | `bash hooks/before-shell.sh`  | yes (exit **2**)         | `hooks.failClosed` |
+| `afterFileEdit`        | `bash hooks/after-edit.sh`    | no                       | false              |
+| `stop`                 | `bash hooks/stop.sh`          | soft: `followup_message` | false              |
 
 `beforeMCPExecution` is optional: copy from `harness/render/cursor/optional/before-mcp.sh` if you want MCP gated the same way as shell.
 

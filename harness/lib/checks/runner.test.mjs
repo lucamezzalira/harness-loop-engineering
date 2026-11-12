@@ -4,12 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  loadSensors,
-  countExecutableLines,
-  resolveHarnessEnv,
-  normalizeWhere,
-} from './common.mjs';
+import { loadSensors, countExecutableLines, resolveHarnessEnv, normalizeWhere } from './common.mjs';
 import { runChecks, reportExitCode, printWhereSummary } from './runner.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -104,7 +99,11 @@ exit 3
     );
     fs.chmodSync(path.join(tmp, 'harness', 'sensors', 'checks', 'secrets.sh'), 0o755);
     fs.mkdirSync(path.join(tmp, '.git'));
-    const report = await runChecks(tmp, { verify: { failFast: true }, baseline: {} }, { tier: 'turn' });
+    const report = await runChecks(
+      tmp,
+      { verify: { failFast: true }, baseline: {} },
+      { tier: 'turn' },
+    );
     assert.equal(report.checks[0].status, 'skipped');
     assert.equal(reportExitCode(report), 0);
   } finally {
@@ -137,7 +136,11 @@ exit 3
     );
     fs.chmodSync(path.join(tmp, 'harness', 'sensors', 'checks', 'secrets.sh'), 0o755);
     fs.mkdirSync(path.join(tmp, '.git'));
-    const report = await runChecks(tmp, { verify: { failFast: true }, baseline: {} }, { tier: 'turn' });
+    const report = await runChecks(
+      tmp,
+      { verify: { failFast: true }, baseline: {} },
+      { tier: 'turn' },
+    );
     assert.equal(report.checks[0].status, 'harness-error');
     assert.equal(reportExitCode(report), 2);
   } finally {
@@ -189,7 +192,10 @@ test('where filter: CI-only sensor deferred locally and runs under HARNESS_ENV=c
       ['unit'],
     );
     assert.deepEqual(local.deferredToCi, ['sast']);
-    assert.equal(local.checks.find((c) => c.name === 'sast'), undefined);
+    assert.equal(
+      local.checks.find((c) => c.name === 'sast'),
+      undefined,
+    );
 
     const ci = await runChecks(
       tmp,

@@ -20,8 +20,16 @@ test('A-22 the retired host name survives only in the two historical ADRs', () =
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
-    .filter((line) => !line.includes(`${path.sep}docs${path.sep}adr${path.sep}0001-`) && !line.includes('/docs/adr/0001-'))
-    .filter((line) => !line.includes(`${path.sep}docs${path.sep}adr${path.sep}0004-`) && !line.includes('/docs/adr/0004-'));
+    .filter(
+      (line) =>
+        !line.includes(`${path.sep}docs${path.sep}adr${path.sep}0001-`) &&
+        !line.includes('/docs/adr/0001-'),
+    )
+    .filter(
+      (line) =>
+        !line.includes(`${path.sep}docs${path.sep}adr${path.sep}0004-`) &&
+        !line.includes('/docs/adr/0004-'),
+    );
   assert.deepEqual(lines, [], lines.join('\n'));
 });
 

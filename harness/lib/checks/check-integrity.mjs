@@ -1,10 +1,10 @@
-import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { minimatchLike } from '../util/glob.mjs';
 import { readSession } from '../accounting.mjs';
 import { loadConfig } from '../config.mjs';
+import { recordIsLive } from '../enforce/check-edit-record.mjs';
 
 const CODE_EXT = /\.(?:mjs|cjs|js|jsx|ts|tsx)$/;
 const TEST_EXT = /\.test\.(?:mjs|cjs|js|jsx|ts|tsx)$/;
@@ -40,12 +40,21 @@ export function checkPathsFromConfig(config) {
 }
 
 export function pathIsProtected(rel, patterns = DEFAULT_CHECK_PATHS) {
-  const file = String(rel || '').replace(/\\/g, '/').replace(/^\.\//, '');
+  const file = String(rel || '')
+    .replace(/\\/g, '/')
+    .replace(/^\.\//, '');
   return patterns.some((pattern) => minimatchLike(file, pattern) || file === pattern);
 }
 
-export function sessionAllowsCheckEdit(session) {
-  return Boolean(session?.explicitCheckEdit);
+export function pathCoveredByRecord(rel, session, checkPaths, now = Date.now()) {
+  const record = session?.explicitCheckEdit;
+  if (!recordIsLive(record, { now, sessionId: session?.id })) return false;
+  const globs = record.paths.includes('all') ? checkPaths : record.paths;
+  return globs.some((pattern) => pathIsProtected(rel, [pattern]));
+}
+
+export function sessionAllowsCheckEdit(session, now = Date.now()) {
+  return recordIsLive(session?.explicitCheckEdit, { now, sessionId: session?.id });
 }
 
 /**
@@ -57,6 +66,7 @@ export function evaluateCheckIntegrity({
   untracked = [],
   session = null,
   checkPaths = DEFAULT_CHECK_PATHS,
+  now = Date.now(),
 } = {}) {
   const findings = [];
   const changed = new Set();
@@ -101,14 +111,13 @@ export function evaluateCheckIntegrity({
     changed.add(file);
   }
 
-  if (!sessionAllowsCheckEdit(session)) {
-    for (const file of changed) {
-      if (pathIsProtected(file, checkPaths)) {
-        findings.push({
-          file,
-          message: 'protected check path changed without an explicit instruction record',
-        });
-      }
+  for (const file of changed) {
+    if (!pathIsProtected(file, checkPaths)) continue;
+    if (!pathCoveredByRecord(file, session, checkPaths, now)) {
+      findings.push({
+        file,
+        message: 'protected check path changed without an explicit instruction record',
+      });
     }
   }
 

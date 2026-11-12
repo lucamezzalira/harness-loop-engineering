@@ -1,5 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { readSession, writeSession } from '../accounting.mjs';
+import { isTTY, prompt } from '../tty.mjs';
 
 function backlogPath(root) {
   return path.join(root, 'harness', 'state', 'backlog.json');
@@ -95,6 +97,80 @@ export function promoteRecurring(root, config) {
     '\n';
   fs.writeFileSync(out, body);
   return out;
+}
+
+function slugFor(item) {
+  const raw = `${item.role || 'finding'}-${item.category || 'note'}-${item.line || 0}`;
+  return (
+    String(raw)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 48) || 'promoted-finding'
+  );
+}
+
+function writeSpecStub(root, item) {
+  const slug = slugFor(item);
+  const dir = path.join(root, 'specs', slug);
+  fs.mkdirSync(dir, { recursive: true });
+  const prd = path.join(dir, 'PRD.md');
+  if (!fs.existsSync(prd)) {
+    fs.writeFileSync(
+      prd,
+      `# ${slug}\n\nPromoted from ${item.role || '?'}: ${item.message || ''}\n`,
+    );
+  }
+  const acc = path.join(dir, 'acceptance.json');
+  if (!fs.existsSync(acc)) {
+    fs.writeFileSync(acc, JSON.stringify({ entries: [] }, null, 2) + '\n');
+  }
+  return slug;
+}
+
+/**
+ * On a TTY, keep / discard / promote one finding at a time.
+ * Without a TTY, print the same list as before.
+ */
+export async function triageBacklog(root, io = {}) {
+  const interactive = io.isTTY ? io.isTTY() : isTTY();
+  if (!interactive || process.env.HARNESS_IN_HOOK === '1') {
+    return { exitCode: 0, text: renderBacklog(root) };
+  }
+  const data = readBacklog(root);
+  const ask = io.ask || ((q) => prompt(q, { defaultAnswer: 'keep', nonInteractive: 'keep' }));
+  const session = readSession(root) || {
+    id: `adhoc-${Date.now().toString(36)}`,
+    dismissedByRole: {},
+    reviewFindings: [],
+  };
+  session.dismissedByRole = session.dismissedByRole || {};
+  for (const item of data.items) {
+    if (item.outcome === 'dismissed' || item.outcome === 'promoted' || item.outcome === 'fixed') {
+      continue;
+    }
+    const answer = String(
+      (await ask(
+        `[${item.severity}] ${item.role || '?'} ${item.file || ''}:${item.line ?? ''} ${item.message || ''}\nkeep, discard, or promote? `,
+      )) || 'keep',
+    )
+      .trim()
+      .toLowerCase();
+    if (answer.startsWith('d')) {
+      item.outcome = 'dismissed';
+      const role = item.role || '?';
+      session.dismissedByRole[role] = (session.dismissedByRole[role] || 0) + 1;
+    } else if (answer.startsWith('p')) {
+      item.outcome = 'promoted';
+      item.promotedSlug = writeSpecStub(root, item);
+    } else {
+      item.outcome = 'open';
+    }
+  }
+  writeBacklog(root, data);
+  session.reviewFindings = data.items.map((item) => ({ ...item }));
+  writeSession(root, session);
+  return { exitCode: 0, text: renderBacklog(root), session };
 }
 
 export function renderBacklog(root) {

@@ -1,11 +1,6 @@
-node_modules/
-harness/state/
-.cursor/
-.claude/
+node_modules
 package-lock.json
-examples/two-services/package-lock.json
-examples/two-services/node_modules/
-coverage/
-dist/
-worktrees/
-*.log
+coverage
+harness/state
+harness/retro
+docs/adr

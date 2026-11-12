@@ -8,7 +8,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 
-const ROOT = process.env.HARNESS_ROOT || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT =
+  process.env.HARNESS_ROOT || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ADR_DIR = path.join(ROOT, 'docs', 'adr');
 const STATUSES = new Set(['proposed', 'accepted', 'deprecated', 'superseded']);
 const REQUIRED = [
@@ -78,9 +79,7 @@ function main() {
       fail(`${rel}: id "${idRaw}" does not match filename prefix`);
     }
     if (!STATUSES.has(data.status)) {
-      fail(
-        `${rel}: status must be one of ${[...STATUSES].join(', ')}, got "${data.status}"`,
-      );
+      fail(`${rel}: status must be one of ${[...STATUSES].join(', ')}, got "${data.status}"`);
     }
     const touches = asList(data.touches);
     if (!touches.length) fail(`${rel}: touches must be a non-empty list`);

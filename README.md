@@ -81,34 +81,34 @@ Reviews are **not** free-form chat in the main thread. Separate roles run agains
 
 Which model each role gets comes from the active **profile** in `harness/models.yaml` (default / cheap / offline). Roles never pick their own severity; they return a `category`, and `harness.yaml` maps that to P0–P3.
 
-| Role | When it runs (default) | Default model tier |
-| ---- | ---------------------- | ------------------ |
-| reviewer | End of every turn | deep (`claude-opus-5`) |
-| security | End of unit, and only if the diff hits `securityPaths` | deep |
-| product | End of unit, or when `specs/**` / acceptance changed | balanced (`claude-sonnet-5`) |
-| qa | End of unit if enabled (off by default) | fast (`claude-haiku-4-5-…`) |
-| planner | `--plan` only | deep |
-| test-writer / infra | When enabled and relevant | balanced |
+| Role                | When it runs (default)                                 | Default model tier           |
+| ------------------- | ------------------------------------------------------ | ---------------------------- |
+| reviewer            | End of every turn                                      | deep (`claude-opus-5`)       |
+| security            | End of unit, and only if the diff hits `securityPaths` | deep                         |
+| product             | End of unit, or when `specs/**` / acceptance changed   | balanced (`claude-sonnet-5`) |
+| qa                  | End of unit if enabled (off by default)                | fast (`claude-haiku-4-5-…`)  |
+| planner             | `--plan` only                                          | deep                         |
+| test-writer / infra | When enabled and relevant                              | balanced                     |
 
 See `harness/roles/README.md` for why those tiers exist.
 
 ### Exit codes
 
-| Code | Meaning | Who acts |
-| ---- | ------- | -------- |
-| 0 | pass | proceed |
-| 1 | the code is wrong | agent fixes and retries |
-| 2 | the harness is wrong (missing tool, bad config, bad flags) | stop and report; never retry as if code is wrong |
+| Code | Meaning                                                    | Who acts                                         |
+| ---- | ---------------------------------------------------------- | ------------------------------------------------ |
+| 0    | pass                                                       | proceed                                          |
+| 1    | the code is wrong                                          | agent fixes and retries                          |
+| 2    | the harness is wrong (missing tool, bad config, bad flags) | stop and report; never retry as if code is wrong |
 
 ### What can refuse
 
-| Moment | What runs | Can refuse? |
-| ------ | --------- | ----------- |
-| session start | Orientation (git log, handoff, bindings) | no |
-| before shell / MCP | Ship gate, `rm -rf`, force push, … | yes (exit 2) |
-| after edit | `--edit` tier | no (reports only) |
-| stop | `--turn` + review panel | yes (follow-up / block finish) |
-| pre-commit | `report.json` must be green + matching tree; explicit ship instruction | yes |
+| Moment             | What runs                                                              | Can refuse?                    |
+| ------------------ | ---------------------------------------------------------------------- | ------------------------------ |
+| session start      | Orientation (git log, handoff, bindings)                               | no                             |
+| before shell / MCP | Ship gate, `rm -rf`, force push, …                                     | yes (exit 2)                   |
+| after edit         | `--edit` tier                                                          | no (reports only)              |
+| stop               | `--turn` + review panel                                                | yes (follow-up / block finish) |
+| pre-commit         | `report.json` must be green + matching tree; explicit ship instruction | yes                            |
 
 `HARNESS_IN_HOOK=1` stops infinite recursion when a hook calls `verify.sh`.
 
@@ -172,14 +172,14 @@ flowchart TB
   HOOK --> MOMENTS["session / edit / stop / pre-tool"]
 ```
 
-| Group | What it is for |
-| ----- | -------------- |
-| Check tiers | How green is the tree right now (edit is fast, turn is fuller, commit is everything) |
-| Plan and run | Decompose a PRD, drive unit-by-unit work, or continue after a pause |
-| Setup | First-time wiring and regenerating the tool adapter |
-| Inspect | Config, cost, and P2/P3 backlog without changing the tree |
-| Host wiring | Called only by Cursor and Claude hooks and git pre-commit |
-| Meta | Usage and version |
+| Group        | What it is for                                                                       |
+| ------------ | ------------------------------------------------------------------------------------ |
+| Check tiers  | How green is the tree right now (edit is fast, turn is fuller, commit is everything) |
+| Plan and run | Decompose a PRD, drive unit-by-unit work, or continue after a pause                  |
+| Setup        | First-time wiring and regenerating the tool adapter                                  |
+| Inspect      | Config, cost, and P2/P3 backlog without changing the tree                            |
+| Host wiring  | Called only by Cursor and Claude hooks and git pre-commit                            |
+| Meta         | Usage and version                                                                    |
 
 ### In action (the full system)
 
@@ -263,23 +263,24 @@ flowchart LR
 
 ## Commands
 
-| Command                        | What it does                                                                                     | When to use it                                                         |
-| ------------------------------ | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
-| `./verify.sh`                  | Runs the **commit** tier (edit + turn + commit checks)                                           | Before you ask for a commit, in CI, or as the default "is this green?" |
-| `./verify.sh --edit`           | **Edit** tier on changed files (format, lint, context-budget), target under ~1s                  | After a single-file edit; wired to post-edit hooks                     |
-| `./verify.sh --turn`           | **Turn** tier (adds types, secrets, unit, env, boundaries, contracts, acceptance, complexity, …) | End of an agent turn, before the panel                                 |
-| `./verify.sh --plan`           | Planner decomposes `loop.prd` into `harness/state/plan.json`, then stops                         | When a PRD is ready to split into units/waves                          |
-| `./verify.sh --loop`           | Runs the plan wave by wave; ends with work **staged, not committed**                             | Unattended or budgeted implementation against a plan                   |
-| `./verify.sh --resume`         | Continues a recorded session; asks on tree drift                                                 | After interrupt, `STOP` file, or budget pause                          |
-| `./verify.sh --status`         | Prints resolved profile/tool bindings and current session                                        | Before spending tokens; debugging config                               |
-| `./verify.sh --report`         | Session cost/token recap (marks `(estimated)` when needed)                                       | End of session or after the fact                                       |
-| `./verify.sh --backlog`        | Renders P2/P3 findings for triage                                                                | Session end triage (keep / discard / promote to spec)                  |
-| `./verify.sh --install`        | Detects PM/module/tests, writes baselines, audits practices, wires hooks                         | First setup in a repo (idempotent)                                     |
-| `./verify.sh --render`         | Writes the adapter for the **one** configured tool                                               | After changing roles/models/tool; or onboarding a machine              |
-| `./verify.sh --render --check` | Exit 1 if generated adapter drifted                                                              | CI drift detection                                                     |
-| `./verify.sh --hook`           | Reads hook payload on stdin                                                                      | Only via tool hooks / git pre-commit (not by hand)                     |
-| `./verify.sh -h` / `--help`    | Usage                                                                                            | —                                                                      |
-| `./verify.sh -v` / `--version` | Version                                                                                          | —                                                                      |
+| Command                          | What it does                                                                                     | When to use it                                                         |
+| -------------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| `./verify.sh`                    | Runs the **commit** tier (edit + turn + commit checks)                                           | Before you ask for a commit, in CI, or as the default "is this green?" |
+| `./verify.sh --edit`             | **Edit** tier on changed files (format, lint, context-budget), target under ~1s                  | After a single-file edit; wired to post-edit hooks                     |
+| `./verify.sh --turn`             | **Turn** tier (adds types, secrets, unit, env, boundaries, contracts, acceptance, complexity, …) | End of an agent turn, before the panel                                 |
+| `./verify.sh --plan`             | Planner decomposes `loop.prd` into `harness/state/plan.json`, then stops                         | When a PRD is ready to split into units/waves                          |
+| `./verify.sh --loop`             | Runs the plan wave by wave; ends with work **staged, not committed**                             | Unattended or budgeted implementation against a plan                   |
+| `./verify.sh --resume`           | Continues a recorded session; asks on tree drift                                                 | After interrupt, `STOP` file, or budget pause                          |
+| `./verify.sh --status`           | Prints resolved profile/tool bindings and current session                                        | Before spending tokens; debugging config                               |
+| `./verify.sh --report`           | Session cost/token recap (marks `(estimated)` when needed)                                       | End of session or after the fact                                       |
+| `./verify.sh --backlog`          | Renders P2/P3 findings for triage. On a terminal, keep, discard, or promote one at a time.       | Session end triage (keep / discard / promote to spec)                  |
+| `./verify.sh --allow-check-edit` | Records which protected check paths a developer is changing, and why. Terminal only.             | Before editing a sensor, `harness.yaml`, or a lint config              |
+| `./verify.sh --install`          | Detects PM/module/tests, writes baselines, audits practices, wires hooks                         | First setup in a repo (idempotent)                                     |
+| `./verify.sh --render`           | Writes the adapter for the **one** configured tool                                               | After changing roles/models/tool; or onboarding a machine              |
+| `./verify.sh --render --check`   | Exit 1 if generated adapter drifted                                                              | CI drift detection                                                     |
+| `./verify.sh --hook`             | Reads hook payload on stdin                                                                      | Only via tool hooks / git pre-commit (not by hand)                     |
+| `./verify.sh -h` / `--help`      | Usage                                                                                            | —                                                                      |
+| `./verify.sh -v` / `--version`   | Version                                                                                          | —                                                                      |
 
 Two action flags together exit `2` naming both. Unknown flags exit `2` and print the list.
 
@@ -300,20 +301,20 @@ Review roles: host-tool CLI first (Cursor or Claude Code), then provider API fal
 
 ### If you change a setting
 
-| Setting               | Default               | What changes                       | When you want the other value                                    |
-| --------------------- | --------------------- | ---------------------------------- | ---------------------------------------------------------------- |
-| `verify.failFast`     | `true`                | Stops at first blocking fail       | `false` in CI to collect all failures                            |
-| `review.maxCycles`    | `3`                   | Panel iterations before escalation | Lower to save cost; higher for stubborn P1s                      |
-| `review.cadence.turn` | `[reviewer]`          | Roles at end of turn               | Add roles only if budget allows                                  |
-| `review.cadence.unit` | `[security, product]` | Roles at unit end                  | Keep cheap; put specialists on wave/ship                         |
-| `review.cadence.wave` | specialists           | Roles after a wave                 | Expand when parallel waves need broader review                   |
-| `review.cadence.ship` | specialists           | Final panel before staging         | Must stay complete enough to catch acceptance gaps               |
-| `loop.unitStallFactor`| `2`                   | Stall → `unclosable` ceiling       | Raise only if units routinely need long recoveries               |
-| `loop.maxTurns`       | required for `--loop` | Hard stop on agent cycles          | Size to the PRD, not "unlimited"                                 |
-| `profile` (local)     | `default`             | Model assignment from models.yaml  | `hybrid-local` for Ollama panels + host-tool edits               |
-| `baseline.*`          | set by `--install`    | Ratchet: fail on growth only       | Lower after a cleanup; never raise casually                      |
-| `logs.enabled`        | `false`               | NDJSON event log                   | `true` / `full` when debugging a stuck loop                      |
-| `confirmProfile`      | `true`                | Asks before spending on plan/loop  | `false` only in controlled automation (`gate: never` also skips) |
+| Setting                | Default               | What changes                       | When you want the other value                                    |
+| ---------------------- | --------------------- | ---------------------------------- | ---------------------------------------------------------------- |
+| `verify.failFast`      | `true`                | Stops at first blocking fail       | `false` in CI to collect all failures                            |
+| `review.maxCycles`     | `3`                   | Panel iterations before escalation | Lower to save cost; higher for stubborn P1s                      |
+| `review.cadence.turn`  | `[reviewer]`          | Roles at end of turn               | Add roles only if budget allows                                  |
+| `review.cadence.unit`  | `[security, product]` | Roles at unit end                  | Keep cheap; put specialists on wave/ship                         |
+| `review.cadence.wave`  | specialists           | Roles after a wave                 | Expand when parallel waves need broader review                   |
+| `review.cadence.ship`  | specialists           | Final panel before staging         | Must stay complete enough to catch acceptance gaps               |
+| `loop.unitStallFactor` | `2`                   | Stall → `unclosable` ceiling       | Raise only if units routinely need long recoveries               |
+| `loop.maxTurns`        | required for `--loop` | Hard stop on agent cycles          | Size to the PRD, not "unlimited"                                 |
+| `profile` (local)      | `default`             | Model assignment from models.yaml  | `hybrid-local` for Ollama panels + host-tool edits               |
+| `baseline.*`           | set by `--install`    | Ratchet: fail on growth only       | Lower after a cleanup; never raise casually                      |
+| `logs.enabled`         | `false`               | NDJSON event log                   | `true` / `full` when debugging a stuck loop                      |
+| `confirmProfile`       | `true`                | Asks before spending on plan/loop  | `false` only in controlled automation (`gate: never` also skips) |
 
 If you cannot write the third column for a knob, make it a constant instead of a setting.
 
@@ -335,33 +336,33 @@ docs/adr/
 examples/two-services/    # deletable demo estate
 ```
 
-| Path | Role |
-| ---- | ---- |
-| `verify.sh` | Single entry point for tiers, plan/loop, install, render, and hooks |
-| `AGENTS.md` / `CLAUDE.md` | Standing instructions for the coding agent (`CLAUDE.md` points at `AGENTS.md`) |
-| `HANDOFF.md` | Short session notes the next agent (or human) reads first |
-| `harness.yaml` | Shared, committed behaviour: project, roles, severity, limits, baselines |
-| `harness.local.yaml` | Per-machine tool and profile; never committed |
-| `harness/models.yaml` | Provider and model IDs only; roles pick tiers, not model strings |
-| `harness/roles/` | Reviewer / planner / security prompts rendered into the tool adapter |
-| `harness/render/rules/` | Standing constraints (Cursor-shaped); rendered into the tool adapter |
-| `harness/skills/` | Step-by-step playbooks (ADR, PRD, session start) linked into `.cursor` / `.claude` |
-| `harness/sensors/` | Registry (`sensors.yaml`), thin shell checks, and failure guidance |
-| `harness/enforce/` | Ship gate, pre-tool refuse, stop/edit hook logic |
-| `harness/render/` | Tool adapters (Cursor and Claude templates and hook scripts) |
-| `harness/state/` | Machine output: `report.json`, plan, session, backlog (gitignored) |
-| `specs/<slug>/` | PRD plus `acceptance.json` for a piece of work |
-| `docs/adr/` | Architecture decisions that outlive a unit |
-| `examples/two-services/` | Optional demo monorepo to try boundaries and checks |
+| Path                      | Role                                                                               |
+| ------------------------- | ---------------------------------------------------------------------------------- |
+| `verify.sh`               | Single entry point for tiers, plan/loop, install, render, and hooks                |
+| `AGENTS.md` / `CLAUDE.md` | Standing instructions for the coding agent (`CLAUDE.md` points at `AGENTS.md`)     |
+| `HANDOFF.md`              | Short session notes the next agent (or human) reads first                          |
+| `harness.yaml`            | Shared, committed behaviour: project, roles, severity, limits, baselines           |
+| `harness.local.yaml`      | Per-machine tool and profile; never committed                                      |
+| `harness/models.yaml`     | Provider and model IDs only; roles pick tiers, not model strings                   |
+| `harness/roles/`          | Reviewer / planner / security prompts rendered into the tool adapter               |
+| `harness/render/rules/`   | Standing constraints (Cursor-shaped); rendered into the tool adapter               |
+| `harness/skills/`         | Step-by-step playbooks (ADR, PRD, session start) linked into `.cursor` / `.claude` |
+| `harness/sensors/`        | Registry (`sensors.yaml`), thin shell checks, and failure guidance                 |
+| `harness/enforce/`        | Ship gate, pre-tool refuse, stop/edit hook logic                                   |
+| `harness/render/`         | Tool adapters (Cursor and Claude templates and hook scripts)                       |
+| `harness/state/`          | Machine output: `report.json`, plan, session, backlog (gitignored)                 |
+| `specs/<slug>/`           | PRD plus `acceptance.json` for a piece of work                                     |
+| `docs/adr/`               | Architecture decisions that outlive a unit                                         |
+| `examples/two-services/`  | Optional demo monorepo to try boundaries and checks                                |
 
 ## Review panel
 
-| Cadence | When | Default roles |
-| --- | --- | --- |
-| `turn` | After every agent turn | `reviewer` only (cheap) |
-| `unit` | When a unit looks complete | `security`, `product` |
-| `wave` | After a wave merges | Reviewer + specialists |
-| `ship` | Final panel before staging | Same specialist set as wave |
+| Cadence | When                       | Default roles               |
+| ------- | -------------------------- | --------------------------- |
+| `turn`  | After every agent turn     | `reviewer` only (cheap)     |
+| `unit`  | When a unit looks complete | `security`, `product`       |
+| `wave`  | After a wave merges        | Reviewer + specialists      |
+| `ship`  | Final panel before staging | Same specialist set as wave |
 
 Path triggers in `harness.yaml` still add roles when matching files change.
 Security always runs on unit complete even without a path hit.
@@ -388,12 +389,12 @@ Independent of `gate` and `--loop`:
 
 ## Non-interactive prompts
 
-| Prompt                      | Interactive | Non-interactive                                      |
-| --------------------------- | ----------- | ---------------------------------------------------- |
+| Prompt                      | Interactive | Non-interactive                           |
+| --------------------------- | ----------- | ----------------------------------------- |
 | `--install` tool choice     | asks        | detect `.cursor` / `.claude`, else exit 2 |
-| Profile confirmation        | asks        | skipped; assignment written to log/stderr            |
-| Split recommendation        | asks        | record and proceed                                   |
-| Commit / push / PR / deploy | asks        | **refuses**                                          |
+| Profile confirmation        | asks        | skipped; assignment written to log/stderr |
+| Split recommendation        | asks        | record and proceed                        |
+| Commit / push / PR / deploy | asks        | **refuses**                               |
 
 ## Complexity check
 
@@ -423,25 +424,44 @@ Thin hook scripts are **bash → `verify.sh` only** (no Node in the adapter).
 
 Details: [`harness/render/cursor/HOOKS.md`](harness/render/cursor/HOOKS.md).
 
+## Paths that need a person
+
+`review.humanRequired.paths` is the list of globs that stop a loop unit for a person. The shared default includes `**/auth/**`, `**/payments/**`, `**/migrations/**`, `infra/**`, `terraform/**`, `.github/workflows/**`, and `harness/**`.
+
+`harness/**` stays in that default so a consuming repo always needs a person when an agent edits the harness. In this repository that same glob would stop every harness unit, so override it locally. Arrays replace on the deep merge (`harness.local.yaml` wins over `harness.yaml`):
+
+```yaml
+review:
+  humanRequired:
+    paths:
+      - '**/auth/**'
+      - '**/payments/**'
+      - '**/migrations/**'
+```
+
+`./verify.sh --status` prints the effective `humanRequired.paths`.
+
+A protected check edit is separate. `./verify.sh --allow-check-edit` (interactive terminal only) records the globs and a one-line reason on the session. `pre_tool` and `check-integrity` allow a protected path only when that record covers it.
+
 ## Course map
 
-| Concept | Where it lives |
-| --- | --- |
-| guides and sensors | [`harness/sensors/sensors.yaml`](harness/sensors/sensors.yaml) |
-| hooks | [`harness/render/cursor/hooks/before-shell.sh`](harness/render/cursor/hooks/before-shell.sh) |
-| exit codes | [`docs/adr/0003-checks-return-four-exit-codes.md`](docs/adr/0003-checks-return-four-exit-codes.md) |
-| ship gate | [`harness/lib/enforce/pre_tool.mjs`](harness/lib/enforce/pre_tool.mjs) |
-| checks the agent can't skip | [`harness/lib/checks/check-integrity.mjs`](harness/lib/checks/check-integrity.mjs) |
-| paths that need a person | [`harness/lib/review/human-required.mjs`](harness/lib/review/human-required.mjs) |
-| mutation testing | [`harness/sensors/checks/mutation.sh`](harness/sensors/checks/mutation.sh) |
-| escape to test | [`harness/skills/fix-an-escape/SKILL.md`](harness/skills/fix-an-escape/SKILL.md) |
-| budgets and STOP | [`harness/lib/plan/loop.mjs`](harness/lib/plan/loop.mjs) |
-| worktrees | [`harness/lib/plan/loop.mjs`](harness/lib/plan/loop.mjs) |
-| memory | [`HANDOFF.md`](HANDOFF.md) |
-| checker subagents | [`harness/roles/acceptance-checker.md`](harness/roles/acceptance-checker.md) |
-| the retro | [`harness/lib/plan/retro.mjs`](harness/lib/plan/retro.mjs) |
-| the trust ladder | [`harness/lib/panel/trust.mjs`](harness/lib/panel/trust.mjs) |
-| review metrics | [`harness/lib/accounting.mjs`](harness/lib/accounting.mjs) |
+| Concept                     | Where it lives                                                                                     |
+| --------------------------- | -------------------------------------------------------------------------------------------------- |
+| guides and sensors          | [`harness/sensors/sensors.yaml`](harness/sensors/sensors.yaml)                                     |
+| hooks                       | [`harness/render/cursor/hooks/before-shell.sh`](harness/render/cursor/hooks/before-shell.sh)       |
+| exit codes                  | [`docs/adr/0003-checks-return-four-exit-codes.md`](docs/adr/0003-checks-return-four-exit-codes.md) |
+| ship gate                   | [`harness/lib/enforce/pre_tool.mjs`](harness/lib/enforce/pre_tool.mjs)                             |
+| checks the agent can't skip | [`harness/lib/checks/check-integrity.mjs`](harness/lib/checks/check-integrity.mjs)                 |
+| paths that need a person    | [`harness/lib/review/human-required.mjs`](harness/lib/review/human-required.mjs)                   |
+| mutation testing            | [`harness/sensors/checks/mutation.sh`](harness/sensors/checks/mutation.sh)                         |
+| escape to test              | [`harness/skills/fix-an-escape/SKILL.md`](harness/skills/fix-an-escape/SKILL.md)                   |
+| budgets and STOP            | [`harness/lib/plan/loop.mjs`](harness/lib/plan/loop.mjs)                                           |
+| worktrees                   | [`harness/lib/plan/loop.mjs`](harness/lib/plan/loop.mjs)                                           |
+| memory                      | [`HANDOFF.md`](HANDOFF.md)                                                                         |
+| checker subagents           | [`harness/roles/acceptance-checker.md`](harness/roles/acceptance-checker.md)                       |
+| the retro                   | [`harness/lib/plan/retro.mjs`](harness/lib/plan/retro.mjs)                                         |
+| the trust ladder            | [`harness/lib/panel/trust.mjs`](harness/lib/panel/trust.mjs)                                       |
+| review metrics              | [`harness/lib/accounting.mjs`](harness/lib/accounting.mjs)                                         |
 
 ## License
 

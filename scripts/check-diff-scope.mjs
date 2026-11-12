@@ -3,12 +3,12 @@
  * Bounded-context diff scope: fail if a diff spans 2+ contexts without an ADR.
  * Exit 0 pass / skip, 1 code-wrong, 2 harness-wrong (bad config).
  */
-import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = process.env.HARNESS_ROOT || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT =
+  process.env.HARNESS_ROOT || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 function loadContexts() {
   let config = {};
@@ -47,7 +47,11 @@ function changedFiles() {
     encoding: 'utf8',
   });
   const set = new Set(
-    [...(r.stdout || '').split('\n'), ...(staged.stdout || '').split('\n'), ...(untracked.stdout || '').split('\n')]
+    [
+      ...(r.stdout || '').split('\n'),
+      ...(staged.stdout || '').split('\n'),
+      ...(untracked.stdout || '').split('\n'),
+    ]
       .map((s) => s.trim())
       .filter(Boolean),
   );

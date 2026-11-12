@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { renderReviewMetrics } from './accounting-review.mjs';
+import { liveCheckEdits } from './enforce/check-edit-record.mjs';
 
 export function readSession(root) {
   const p = path.join(root, 'harness', 'state', 'session.json');
@@ -92,6 +93,13 @@ export function renderReport(root, sessionId) {
     lines.push(`  backlogged     ${b.items?.length || 0} (P2: ${p2}, P3: ${p3})`);
   }
   lines.push(`  stopped        ${session.stopReason || 'n/a'}`);
+  const edits = liveCheckEdits(session);
+  if (edits.length) {
+    lines.push('check edits:');
+    for (const edit of edits) {
+      lines.push(`  ${edit.at} ${edit.by} ${edit.paths.join(',')} ${edit.reason}`);
+    }
+  }
   lines.push('');
   lines.push(renderReviewMetrics(session, { revertRate: gitRevertRate(root) }));
   return lines.join('\n') + '\n';

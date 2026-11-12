@@ -3,27 +3,27 @@
 Hardening learned from production loop runs. Each row is a failure that burned
 turn budget before the fix landed. Pointers are to modules in this repo.
 
-| Failure | What happens | Fix | Code |
-| --- | --- | --- | --- |
-| Bad plans burn the budget | Planner invents `touches` (e.g. `init/src/**`) or writes `A-01: prose` that never matches `acceptance.json` | Normalize acceptance to bare `A-NN`; validate plan before `--loop`; fail closed | `harness/lib/plan/acceptance-id.mjs`, `validate-plan.mjs` |
-| Units that cannot complete never stop | Missing touch evidence or never-passable acceptance keeps calling implementers | Stall → status `unclosable` (terminal); hand off to a human | `harness/lib/plan/loop.mjs` (`shouldStallUnit`, `unitStallLimit`) |
-| Turn panels spin | After `review.maxCycles`, the same unit’s turn panel keeps re-running | Cap turn panels per unit (`turnPanelCapped`) | `harness/lib/enforce/stop.mjs` |
-| Full monorepo tests every turn | Turn-tier unit sensor re-runs `npm test` for the whole tree | Scope from `HARNESS_CHANGED_FILES`; empty list → full suite | `harness/lib/checks/scope-tests.mjs`, `sensors/checks/unit.sh` |
-| Cadence too late / too heavy | Product and security only appear on a final mega-panel | Unit end owns security+product; wave/ship keep specialists | `harness.yaml` `review.cadence`, `panel/dispatch.mjs` |
-| Ship panel blocks with nowhere to go | Final panel exits 1; resume replays all waves | `stopReason: ship-panel-blocking` resumes ship only | `loop.mjs` (`shouldResumeLoop`, skip waves when all terminal) |
-| Local models cannot edit | Offline / local roles return text only; tree never changes | Hybrid profile: local reviewers, host-tool implementers | `harness/models.yaml` `hybrid-local` |
-| Silent no-op | A loop with nothing left to do, or a tier whose diff is empty, still prints pass | `nothing-to-do` exits 0 with one line. Empty turn or commit reports `no-changes`. A done loop with an empty staged diff exits 1 as `done-without-changes` | `harness/lib/plan/loop.mjs`, `harness/lib/checks/runner.mjs` |
-| The agent edits checks | A turn deletes a test, adds a skip, or rewrites a sensor without a recorded instruction | `pre_tool` refuses the write. `check-integrity` fails the diff unless `session.explicitCheckEdit` is set | `harness/lib/enforce/pre_tool.mjs`, `harness/lib/checks/check-integrity.mjs` |
-| Human-required paths | Auth, payments, migrations, infra, workflows, or a dangerous SQL or credential line lands in the diff | The unit becomes `needs-human` and the report stays `humanReview: required`. The panel cannot clear it | `harness/lib/review/human-required.mjs` |
+| Failure                               | What happens                                                                                                | Fix                                                                                                                                                       | Code                                                                         |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Bad plans burn the budget             | Planner invents `touches` (e.g. `init/src/**`) or writes `A-01: prose` that never matches `acceptance.json` | Normalize acceptance to bare `A-NN`; validate plan before `--loop`; fail closed                                                                           | `harness/lib/plan/acceptance-id.mjs`, `validate-plan.mjs`                    |
+| Units that cannot complete never stop | Missing touch evidence or never-passable acceptance keeps calling implementers                              | Stall → status `unclosable` (terminal); hand off to a human                                                                                               | `harness/lib/plan/loop.mjs` (`shouldStallUnit`, `unitStallLimit`)            |
+| Turn panels spin                      | After `review.maxCycles`, the same unit’s turn panel keeps re-running                                       | Cap turn panels per unit (`turnPanelCapped`)                                                                                                              | `harness/lib/enforce/stop.mjs`                                               |
+| Full monorepo tests every turn        | Turn-tier unit sensor re-runs `npm test` for the whole tree                                                 | Scope from `HARNESS_CHANGED_FILES`; empty list → full suite                                                                                               | `harness/lib/checks/scope-tests.mjs`, `sensors/checks/unit.sh`               |
+| Cadence too late / too heavy          | Product and security only appear on a final mega-panel                                                      | Unit end owns security+product; wave/ship keep specialists                                                                                                | `harness.yaml` `review.cadence`, `panel/dispatch.mjs`                        |
+| Ship panel blocks with nowhere to go  | Final panel exits 1; resume replays all waves                                                               | `stopReason: ship-panel-blocking` resumes ship only                                                                                                       | `loop.mjs` (`shouldResumeLoop`, skip waves when all terminal)                |
+| Local models cannot edit              | Offline / local roles return text only; tree never changes                                                  | Hybrid profile: local reviewers, host-tool implementers                                                                                                   | `harness/models.yaml` `hybrid-local`                                         |
+| Silent no-op                          | A loop with nothing left to do, or a tier whose diff is empty, still prints pass                            | `nothing-to-do` exits 0 with one line. Empty turn or commit reports `no-changes`. A done loop with an empty staged diff exits 1 as `done-without-changes` | `harness/lib/plan/loop.mjs`, `harness/lib/checks/runner.mjs`                 |
+| The agent edits checks                | A turn deletes a test, adds a skip, or rewrites a sensor without a recorded instruction                     | `pre_tool` refuses the write. `check-integrity` fails the diff unless `session.explicitCheckEdit` is set                                                  | `harness/lib/enforce/pre_tool.mjs`, `harness/lib/checks/check-integrity.mjs` |
+| Human-required paths                  | Auth, payments, migrations, infra, workflows, or a dangerous SQL or credential line lands in the diff       | The unit becomes `needs-human` and the report stays `humanReview: required`. The panel cannot clear it                                                    | `harness/lib/review/human-required.mjs`                                      |
 
 ## Config knobs
 
-| Knob | Default | Meaning |
-| --- | --- | --- |
-| `loop.unitStallFactor` | `2` | Stall after about `estimatedTurns * factor` when files exist but the unit never completes |
-| `loop.unitStallGraceTurns` | `0` | Extra turns added to the stall ceiling |
-| `review.maxCycles` | `3` | Turn-panel retries before cap / escalation |
-| `HARNESS_UNIT_FULL=1` | unset | Force full `npm test` even when changed files are set |
+| Knob                       | Default | Meaning                                                                                   |
+| -------------------------- | ------- | ----------------------------------------------------------------------------------------- |
+| `loop.unitStallFactor`     | `2`     | Stall after about `estimatedTurns * factor` when files exist but the unit never completes |
+| `loop.unitStallGraceTurns` | `0`     | Extra turns added to the stall ceiling                                                    |
+| `review.maxCycles`         | `3`     | Turn-panel retries before cap / escalation                                                |
+| `HARNESS_UNIT_FULL=1`      | unset   | Force full `npm test` even when changed files are set                                     |
 
 ## Out of scope for the blueprint
 

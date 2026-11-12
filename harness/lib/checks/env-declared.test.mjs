@@ -20,9 +20,7 @@ function runIn(tmp, envExtra = {}) {
 function seedEnvModule(tmp, keys) {
   const dir = path.join(tmp, 'services', 'orders', 'config');
   fs.mkdirSync(dir, { recursive: true });
-  const body = keys
-    .map((k) => `  ${k.toLowerCase()}: required('${k}'),`)
-    .join('\n');
+  const body = keys.map((k) => `  ${k.toLowerCase()}: required('${k}'),`).join('\n');
   fs.writeFileSync(
     path.join(dir, 'env.js'),
     `function required(name){return process.env[name]}\nexport const env = {\n${body}\n};\n`,

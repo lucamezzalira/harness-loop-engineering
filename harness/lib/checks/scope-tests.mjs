@@ -13,7 +13,11 @@ import { spawnSync } from 'node:child_process';
  */
 export function planScopedTests(root, changedFiles) {
   const files = (changedFiles || [])
-    .map((f) => String(f || '').replace(/\\/g, '/').replace(/^\.\//, ''))
+    .map((f) =>
+      String(f || '')
+        .replace(/\\/g, '/')
+        .replace(/^\.\//, ''),
+    )
     .filter(Boolean)
     .filter((f) => !f.startsWith('harness/state/') && f !== 'HANDOFF.md');
 
@@ -204,6 +208,5 @@ export function runScopedTestsCli(root = process.cwd(), env = process.env) {
 }
 
 const isMain =
-  Boolean(process.argv[1]) &&
-  import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+  Boolean(process.argv[1]) && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
 if (isMain) process.exit(runScopedTestsCli());

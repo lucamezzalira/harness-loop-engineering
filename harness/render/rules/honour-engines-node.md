@@ -1,8 +1,8 @@
 ---
 description: Ensures code uses only Node APIs available at the package engines floor
 globs:
-  - "**/package.json"
-  - "**/*.{js,mjs,cjs}"
+  - '**/package.json'
+  - '**/*.{js,mjs,cjs}'
 alwaysApply: false
 ---
 
