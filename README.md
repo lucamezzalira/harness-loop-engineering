@@ -12,13 +12,13 @@ Nothing ships (commit, push, pull request, deploy) without an explicit developer
 # from this repo, or after copying harness files into your service monorepo
 npm install
 cp harness.local.yaml.example harness.local.yaml   # or run --install
-# edit harness.local.yaml and set exactly one of: tool: cursor | claude | codex
+# edit harness.local.yaml and set exactly one of: tool: cursor | claude
 ./verify.sh --install
 ./verify.sh --render
 ./verify.sh --turn
 ```
 
-There is **no default tool**. If `tool` is empty, the harness exits `2` and tells you what to put in `harness.local.yaml`. Claude, Cursor, and Codex adapters are mutual exclusive (only one generated directory).
+There is **no default tool**. If `tool` is empty, the harness exits `2` and tells you what to put in `harness.local.yaml`. Claude and Cursor adapters are mutual exclusive (only one generated directory).
 
 ### Try the example estate
 
@@ -75,7 +75,6 @@ Reviews are **not** free-form chat in the main thread. Separate roles run agains
 1. **Primary:** your configured host tool’s CLI (`tool` in `harness.local.yaml`)
    - `cursor` → `cursor-agent` or `agent`
    - `claude` → `claude`
-   - `codex` → `codex`
 2. **Fallback:** HTTP API from `harness/models.yaml`
    - Anthropic (`ANTHROPIC_API_KEY`) for `claude-opus-5` / `claude-sonnet-5` / `claude-haiku-4-5-20251001`
    - or a local OpenAI-compatible endpoint (e.g. Ollama) on the `offline` profile
@@ -168,7 +167,7 @@ flowchart TB
   LOOP --> P
   RESUME --> P
   INSTALL --> LOCAL["harness.local.yaml + baselines"]
-  RENDER --> ADAPTER[".cursor / .claude / .codex"]
+  RENDER --> ADAPTER[".cursor / .claude"]
   RCHECK --> ADAPTER
   HOOK --> MOMENTS["session / edit / stop / pre-tool"]
 ```
@@ -179,17 +178,17 @@ flowchart TB
 | Plan and run | Decompose a PRD, drive unit-by-unit work, or continue after a pause |
 | Setup | First-time wiring and regenerating the tool adapter |
 | Inspect | Config, cost, and P2/P3 backlog without changing the tree |
-| Host wiring | Called only by Cursor/Claude/Codex hooks and git pre-commit |
+| Host wiring | Called only by Cursor and Claude hooks and git pre-commit |
 | Meta | Usage and version |
 
 ### In action (the full system)
 
-The flags above are the API. In a live session they are not called as a random menu. The host tool (Cursor / Claude / Codex) does the editing; hooks call `./verify.sh --hook` at fixed moments; that process runs the right check tier, may invoke the review panel, and writes `harness/state/report.json`. Guides (`AGENTS.md`, skills) tell the agent when to run `--turn` / `--plan` / `--loop` by hand. Setup (`--install`, `--render`) happens once per machine or when roles change.
+The flags above are the API. In a live session they are not called as a random menu. The host tool (Cursor or Claude) does the editing; hooks call `./verify.sh --hook` at fixed moments; that process runs the right check tier, may invoke the review panel, and writes `harness/state/report.json`. Guides (`AGENTS.md`, skills) tell the agent when to run `--turn` / `--plan` / `--loop` by hand. Setup (`--install`, `--render`) happens once per machine or when roles change.
 
 ```mermaid
 sequenceDiagram
   actor Dev as Developer
-  participant Host as Cursor / Claude / Codex
+  participant Host as Cursor / Claude
   participant Hooks as Adapter hooks
   participant V as ./verify.sh
   participant Sensors as sensors/*.sh
@@ -290,14 +289,14 @@ Precedence: `harness.local.yaml` (gitignored) > `harness.yaml` > defaults. No fl
 
 ```yaml
 # harness.local.yaml — required before --render / --plan / --loop
-tool: cursor # claude | cursor | codex — exactly one, no default
+tool: cursor # claude | cursor — exactly one, no default
 profile: default # from harness/models.yaml
 confirmProfile: true
 ```
 
 Roles never set severity. They return a `category`; `harness.yaml` maps category → P0–P3.
 
-Review roles: host-tool CLI first (Cursor / Claude Code / Codex), then provider API fallback (`ANTHROPIC_API_KEY` or local OpenAI-compatible endpoint).
+Review roles: host-tool CLI first (Cursor or Claude Code), then provider API fallback (`ANTHROPIC_API_KEY` or local OpenAI-compatible endpoint).
 
 ### If you change a setting
 
@@ -349,7 +348,7 @@ examples/two-services/    # deletable demo estate
 | `harness/skills/` | Step-by-step playbooks (ADR, PRD, session start) linked into `.cursor` / `.claude` |
 | `harness/sensors/` | Registry (`sensors.yaml`), thin shell checks, and failure guidance |
 | `harness/enforce/` | Ship gate, pre-tool refuse, stop/edit hook logic |
-| `harness/render/` | Tool adapters (Cursor / Claude / Codex templates and hook scripts) |
+| `harness/render/` | Tool adapters (Cursor and Claude templates and hook scripts) |
 | `harness/state/` | Machine output: `report.json`, plan, session, backlog (gitignored) |
 | `specs/<slug>/` | PRD plus `acceptance.json` for a piece of work |
 | `docs/adr/` | Architecture decisions that outlive a unit |
@@ -391,7 +390,7 @@ Independent of `gate` and `--loop`:
 
 | Prompt                      | Interactive | Non-interactive                                      |
 | --------------------------- | ----------- | ---------------------------------------------------- |
-| `--install` tool choice     | asks        | detect `.cursor` / `.claude` / `.codex`, else exit 2 |
+| `--install` tool choice     | asks        | detect `.cursor` / `.claude`, else exit 2 |
 | Profile confirmation        | asks        | skipped; assignment written to log/stderr            |
 | Split recommendation        | asks        | record and proceed                                   |
 | Commit / push / PR / deploy | asks        | **refuses**                                          |
@@ -423,6 +422,26 @@ Hooks default to **on**. Prefer narrowing matchers over `hooks.enable: false`. O
 Thin hook scripts are **bash → `verify.sh` only** (no Node in the adapter).
 
 Details: [`harness/render/cursor/HOOKS.md`](harness/render/cursor/HOOKS.md).
+
+## Course map
+
+| Concept | Where it lives |
+| --- | --- |
+| guides and sensors | [`harness/sensors/sensors.yaml`](harness/sensors/sensors.yaml) |
+| hooks | [`harness/render/cursor/hooks/before-shell.sh`](harness/render/cursor/hooks/before-shell.sh) |
+| exit codes | [`docs/adr/0003-checks-return-four-exit-codes.md`](docs/adr/0003-checks-return-four-exit-codes.md) |
+| ship gate | [`harness/lib/enforce/pre_tool.mjs`](harness/lib/enforce/pre_tool.mjs) |
+| checks the agent can't skip | [`harness/lib/checks/check-integrity.mjs`](harness/lib/checks/check-integrity.mjs) |
+| paths that need a person | [`harness/lib/review/human-required.mjs`](harness/lib/review/human-required.mjs) |
+| mutation testing | [`harness/sensors/checks/mutation.sh`](harness/sensors/checks/mutation.sh) |
+| escape to test | [`harness/skills/fix-an-escape/SKILL.md`](harness/skills/fix-an-escape/SKILL.md) |
+| budgets and STOP | [`harness/lib/plan/loop.mjs`](harness/lib/plan/loop.mjs) |
+| worktrees | [`harness/lib/plan/loop.mjs`](harness/lib/plan/loop.mjs) |
+| memory | [`HANDOFF.md`](HANDOFF.md) |
+| checker subagents | [`harness/roles/acceptance-checker.md`](harness/roles/acceptance-checker.md) |
+| the retro | [`harness/lib/plan/retro.mjs`](harness/lib/plan/retro.mjs) |
+| the trust ladder | [`harness/lib/panel/trust.mjs`](harness/lib/panel/trust.mjs) |
+| review metrics | [`harness/lib/accounting.mjs`](harness/lib/accounting.mjs) |
 
 ## License
 

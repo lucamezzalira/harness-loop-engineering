@@ -12,6 +12,9 @@ turn budget before the fix landed. Pointers are to modules in this repo.
 | Cadence too late / too heavy | Product and security only appear on a final mega-panel | Unit end owns security+product; wave/ship keep specialists | `harness.yaml` `review.cadence`, `panel/dispatch.mjs` |
 | Ship panel blocks with nowhere to go | Final panel exits 1; resume replays all waves | `stopReason: ship-panel-blocking` resumes ship only | `loop.mjs` (`shouldResumeLoop`, skip waves when all terminal) |
 | Local models cannot edit | Offline / local roles return text only; tree never changes | Hybrid profile: local reviewers, host-tool implementers | `harness/models.yaml` `hybrid-local` |
+| Silent no-op | A loop with nothing left to do, or a tier whose diff is empty, still prints pass | `nothing-to-do` exits 0 with one line. Empty turn or commit reports `no-changes`. A done loop with an empty staged diff exits 1 as `done-without-changes` | `harness/lib/plan/loop.mjs`, `harness/lib/checks/runner.mjs` |
+| The agent edits checks | A turn deletes a test, adds a skip, or rewrites a sensor without a recorded instruction | `pre_tool` refuses the write. `check-integrity` fails the diff unless `session.explicitCheckEdit` is set | `harness/lib/enforce/pre_tool.mjs`, `harness/lib/checks/check-integrity.mjs` |
+| Human-required paths | Auth, payments, migrations, infra, workflows, or a dangerous SQL or credential line lands in the diff | The unit becomes `needs-human` and the report stays `humanReview: required`. The panel cannot clear it | `harness/lib/review/human-required.mjs` |
 
 ## Config knobs
 

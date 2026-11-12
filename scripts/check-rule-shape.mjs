@@ -14,7 +14,6 @@ const SOURCE_DIR = path.join(ROOT, 'harness', 'render', 'rules');
 const RENDER_DIRS = [
   path.join(ROOT, '.cursor', 'rules'),
   path.join(ROOT, '.claude', 'rules'),
-  path.join(ROOT, '.codex', 'rules'),
 ];
 
 let failures = 0;

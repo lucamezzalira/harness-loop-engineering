@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { recordUsage, renderReport, writeSession } from './accounting.mjs';
 import { FAKE_USAGE } from './agents/fake-provider.mjs';
@@ -18,6 +19,15 @@ test('fake provider: two-role panel over three turns has expected totals', async
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-acct-'));
   try {
     fs.mkdirSync(path.join(tmp, 'harness', 'state'), { recursive: true });
+    spawnSync('git', ['init'], { cwd: tmp });
+    fs.writeFileSync(path.join(tmp, 'README'), 'x\n');
+    spawnSync('git', ['add', 'README'], { cwd: tmp });
+    const committed = spawnSync(
+      'git',
+      ['-c', 'user.email=t@example.com', '-c', 'user.name=Test', 'commit', '-m', 'init'],
+      { cwd: tmp },
+    );
+    assert.equal(committed.status, 0, committed.stderr?.toString());
     writeSession(tmp, {
       id: 'test-acct',
       startedAt: new Date().toISOString(),

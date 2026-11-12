@@ -54,3 +54,34 @@ test('ship gate blocks agent commit', () => {
   });
   assert.equal(r.allow, false);
 });
+
+test('A-07 refuses a write on a protected check path without explicitCheckEdit', () => {
+  const denied = preTool(root, {
+    tool_name: 'Write',
+    tool_input: { path: '/repo/harness/sensors/checks/unit.sh', contents: 'echo\n' },
+  });
+  assert.equal(denied.allow, false);
+  assert.match(denied.reason || denied.reasons?.join('\n') || JSON.stringify(denied), /explicitCheckEdit/);
+
+  const allowed = preTool(root, {
+    tool_name: 'Write',
+    tool_input: { path: '/repo/harness/sensors/checks/unit.sh', contents: 'echo\n' },
+    explicitCheckEdit: true,
+  });
+  assert.equal(allowed.allow, true);
+});
+
+test('A-08 refuses shell commands that skip hooks', () => {
+  const commands = [
+    'git commit --no-verify -m x',
+    'HUSKY=0 git commit -m x',
+    'HARNESS_IN_HOOK=1 git commit -m x',
+    'git -c core.hooksPath=/dev/null commit -m x',
+    'git commit -n -m x',
+  ];
+  for (const command of commands) {
+    const r = preTool(root, { tool_name: 'Shell', tool_input: { command } });
+    assert.equal(r.allow, false, command);
+    assert.match(JSON.stringify(r), /skips hooks/, command);
+  }
+});

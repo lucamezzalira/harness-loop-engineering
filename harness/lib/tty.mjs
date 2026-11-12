@@ -99,7 +99,6 @@ export function detectToolFromDirs(root) {
   const markers = [
     ['.cursor', 'cursor'],
     ['.claude', 'claude'],
-    ['.codex', 'codex'],
   ];
   for (const [dir, tool] of markers) {
     if (fs.existsSync(path.join(root, dir))) return tool;

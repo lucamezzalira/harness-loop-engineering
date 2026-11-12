@@ -47,6 +47,53 @@ review:
     infra:    ['infra/**', 'terraform/**']
     product:  ['specs/**']
     performance: ['services/**', 'examples/**', '**/webpack*.{js,cjs,mjs,ts}']
+  humanRequired:
+    paths:
+      - '**/auth/**'
+      - '**/payments/**'
+      - '**/migrations/**'
+      - 'infra/**'
+      - 'terraform/**'
+      - '.github/workflows/**'
+      - 'harness/**'
+    patterns:
+      - 'DROP\s+TABLE'
+      - 'DELETE\s+FROM\b(?!.*\bWHERE\b)'
+      - '\bTRUNCATE\b'
+      - '-----BEGIN [A-Z ]*PRIVATE KEY-----'
+      - '(?:api[_-]?key|secret|password)\s*[:=]\s*[''"][^''"]{8,}'
+  mode:
+    reviewer: blocking
+    security: blocking
+    product: blocking
+    planner: blocking
+    qa: blocking
+    infra: blocking
+    test-writer: blocking
+    acceptance-checker: blocking
+    integrity-checker: blocking
+
+protect:
+  checkPaths:
+    - 'harness/sensors/**'
+    - 'harness/lib/enforce/**'
+    - 'harness/lib/checks/**'
+    - verify.sh
+    - harness.yaml
+    - harness/sensors/sensors.yaml
+    - 'eslint.config.*'
+    - .eslintrc
+    - '.eslintrc.*'
+    - tsconfig.json
+    - 'tsconfig.*.json'
+    - .prettierrc
+    - '.prettierrc.*'
+    - 'prettier.config.*'
+    - 'stryker.conf.*'
+    - 'stryker.config.*'
+
+mutation:
+  local: false
 
 # How role findings map to severity.
 # The role returns a category from a closed list; this table decides how
@@ -65,6 +112,7 @@ severity:
     duplication:         P2
     naming:              P3
     style:               P3
+    mutant-survived:     P2
   default: P2                               # any category not in the map above
 
 # Backlog behaviour for P2 and P3 findings that did not block.

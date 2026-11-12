@@ -58,4 +58,4 @@ replayed."
 
 Canonical sources: `harness/render/rules/*.md` (except `TEMPLATE.md`).
 `./verify.sh --render` copies them into the active tool adapter
-(`.cursor/rules/`, `.claude/rules/`, or `.codex/rules/`).
+(`.cursor/rules/` or `.claude/rules/`).

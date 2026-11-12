@@ -1,7 +1,7 @@
 # context-budget
 
 ## Why this exists
-Codex stops loading context files once the chain reaches 32 KiB, silently. Instruction following also degrades as rule count grows. AGENTS.md must stay under 200 lines; skill bodies under 60.
+Some hosts stop loading context files once the chain reaches 32 KiB, silently. Instruction following also degrades as rule count grows. AGENTS.md must stay under 200 lines; skill bodies under 60.
 
 ## What to do
 1. Move durable decisions into ADRs (`docs/adr/`).

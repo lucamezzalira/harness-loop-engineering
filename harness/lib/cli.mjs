@@ -6,6 +6,7 @@ import { loadConfig, formatAssignmentBlock, requireTool } from './config.mjs';
 import { runChecks, reportExitCode, printWhereSummary } from './checks/runner.mjs';
 import { resolveHarnessEnv } from './checks/common.mjs';
 import { writeReport, readReport } from './report.mjs';
+import { formatPendingHumanReview } from './review/human-required.mjs';
 import { computeTreeHash } from './tree-hash.mjs';
 import { runInstall } from './install.mjs';
 import { renderAdapter } from './render/render.mjs';
@@ -197,7 +198,7 @@ async function main() {
         printWhereSummary(report, { log: console.error });
       } else {
         console.log(
-          `pass tier=${report.tier} env=${report.env} treeHash=${report.treeHash} (${report.durationMs}ms)`,
+          `${report.status} tier=${report.tier} env=${report.env} treeHash=${report.treeHash} (${report.durationMs}ms)`,
         );
         printWhereSummary(report);
       }
@@ -237,6 +238,7 @@ async function main() {
           `last report: ${report.status} tier=${report.tier}` +
             (report.hasWarnings ? ' hasWarnings' : ''),
         );
+        console.log(formatPendingHumanReview(report));
       }
       const session = path.join(ROOT, 'harness', 'state', 'session.json');
       if (fs.existsSync(session)) {

@@ -21,8 +21,10 @@ import { readSession, writeSession, recordUsage, renderReport } from '../account
 import { computeTreeHash } from '../tree-hash.mjs';
 import { newSessionId } from '../log.mjs';
 import { minimatchLike } from '../util/glob.mjs';
+import { collectHumanInputs, matchHumanRequired } from '../review/human-required.mjs';
+import { composeWaveRetro } from './retro.mjs';
 
-const TERMINAL_UNIT_STATUS = new Set(['complete', 'unclosable']);
+const TERMINAL_UNIT_STATUS = new Set(['complete', 'unclosable', 'needs-human']);
 
 export function isTerminalUnitStatus(status) {
   return TERMINAL_UNIT_STATUS.has(status);
@@ -41,6 +43,91 @@ export function shouldResumeLoop(plan, session) {
 }
 
 /**
+ * Missing PRD, empty or missing plan, or a session with no open units.
+ * ship-panel-blocking is still work: the ship panel has to run again.
+ */
+export function loopNothingToDo(root, config, plan, session) {
+  const prdRel = config?.loop?.prd;
+  if (!prdRel || !fs.existsSync(path.join(root, prdRel))) return 'missing PRD';
+  if (!plan || !(plan.units || []).length) return 'empty plan';
+  if (session?.stopReason === 'ship-panel-blocking') return null;
+  if (!session) return null;
+  const status = session.unitStatus || {};
+  const open = plan.units.some((u) => !isTerminalUnitStatus(status[u.id]));
+  if (!open) return 'no incomplete units';
+  return null;
+}
+
+function finishNothingToDo(root, session, why) {
+  const next = session
+    ? { ...session }
+    : {
+        id: 'adhoc',
+        turns: 0,
+        roles: {},
+        units: {},
+        panelCycles: {},
+        unitStatus: {},
+      };
+  next.stopReason = 'nothing-to-do';
+  writeSession(root, next);
+  const line = `nothing-to-do: ${why}`;
+  appendHandoff(root, { title: 'Nothing to do', body: line });
+  console.log(line);
+  return { exitCode: 0, message: line, session: next, stopReason: 'nothing-to-do' };
+}
+
+async function writeFinishedWave(root, config, session, wave) {
+  const rulesPath = path.join(root, 'harness', 'state', 'proposed-rules.md');
+  const proposedRules = fs.existsSync(rulesPath) ? fs.readFileSync(rulesPath, 'utf8') : '';
+  await composeWaveRetro(root, config, {
+    sessionId: session.id || 'adhoc',
+    wave,
+    stats: waveStats(session),
+    proposedRules,
+  });
+}
+
+function waveStats(session) {
+  const status = session.unitStatus || {};
+  return {
+    turnsByUnit: session.unitTurns || {},
+    costByUnit: session.units || {},
+    checks: session.checkFailures || [],
+    stalls: session.stalls || [],
+    unclosable: Object.keys(status).filter((id) => status[id] === 'unclosable'),
+    needsHuman: Object.keys(status).filter((id) => status[id] === 'needs-human'),
+    panelCategories: session.panelCategories || {},
+    mutants: session.mutants || [],
+    timeByUnit: session.unitTimeSec || {},
+    dismissedByRole: session.dismissedByRole || {},
+  };
+}
+
+function diffNames(root, args) {
+  const r = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+  if (r.status !== 0) return [];
+  return (r.stdout || '')
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+export function applyHumanGate(root, config, session, unitId) {
+  const inputs = collectHumanInputs(root);
+  const human = matchHumanRequired(inputs.files, inputs.diff, config);
+  if (!human.required) return { moveOn: false, human };
+  session.unitStatus = session.unitStatus || {};
+  session.unitStatus[unitId] = 'needs-human';
+  appendHandoff(root, {
+    title: 'Needs human',
+    body: `Unit ${unitId} needs a person. Paths: ${human.paths.join(', ') || '(none)'}. Patterns: ${human.patterns.join(', ') || '(none)'}.`,
+  });
+  writeSession(root, session);
+  return { moveOn: true, human };
+}
+
+/**
  * --loop: confirmation, wave by wave, unit by unit.
  * Ends with work staged and not committed (ship gate).
  */
@@ -48,13 +135,14 @@ export async function runLoop(root, config, { resume = false } = {}) {
   requireTool(config);
   assertLoopConfig(config);
 
+  const prior = readSession(root);
   const planPath = path.join(root, 'harness', 'state', 'plan.json');
-  if (!fs.existsSync(planPath)) {
-    const err = new Error('No plan.json. Run ./verify.sh --plan first.');
-    err.exitCode = 2;
-    throw err;
+  let plan = null;
+  if (fs.existsSync(planPath)) {
+    plan = JSON.parse(fs.readFileSync(planPath, 'utf8'));
   }
-  let plan = JSON.parse(fs.readFileSync(planPath, 'utf8'));
+  const idle = loopNothingToDo(root, config, plan, prior, { resume });
+  if (idle) return finishNothingToDo(root, prior, idle);
   plan = normalizePlanAcceptance(plan);
   fs.writeFileSync(planPath, JSON.stringify(plan, null, 2) + '\n');
   const planCheck = validatePlan(root, plan, {
@@ -71,9 +159,9 @@ export async function runLoop(root, config, { resume = false } = {}) {
   }
 
   let session = readSession(root);
-  const wantResume = resume
-    ? Boolean(session) && shouldResumeLoop(plan, session)
-    : false;
+  const keepShip = session?.stopReason === 'ship-panel-blocking';
+  const wantResume =
+    keepShip || (resume ? Boolean(session) && shouldResumeLoop(plan, session) : false);
 
   if (!wantResume || !session) {
     session = {
@@ -135,7 +223,9 @@ export async function runLoop(root, config, { resume = false } = {}) {
       console.error('All units complete; skipping wave panels and running ship panel.');
     }
 
+    let waveIndex = 0;
     for (const wave of plan.waves || []) {
+      waveIndex += 1;
       if (allUnitsComplete) break;
       if (fs.existsSync(path.join(root, 'harness', 'state', 'STOP'))) {
         session.stopReason = 'STOP file';
@@ -184,6 +274,9 @@ export async function runLoop(root, config, { resume = false } = {}) {
           }
         }
       }
+      await writeFinishedWave(root, config, session, waveIndex);
+      session.finishedWaves = waveIndex;
+      writeSession(root, session);
     }
 
     // Ship panel: full specialist coverage before staging
@@ -210,6 +303,17 @@ export async function runLoop(root, config, { resume = false } = {}) {
     // Stage everything; do not commit
     spawnSync('git', ['add', '-A'], { cwd: root });
     const gate = preCommitGate(root, { agentInitiated: true, explicitInstruction: false });
+    const emptyTree = diffNames(root, ['diff', '--cached', '--name-only']).length === 0;
+    if (emptyTree) {
+      session.stopReason = 'done-without-changes';
+      session.treeHashAtPause = computeTreeHash(root);
+      writeSession(root, session);
+      appendHandoff(root, {
+        title: 'Done without changes',
+        body: 'The loop ended done but the staged diff is empty.',
+      });
+      return { exitCode: 1, message: 'done-without-changes', session };
+    }
     session.stopReason = session.stopReason || 'complete';
     session.treeHashAtPause = computeTreeHash(root);
     writeSession(root, session);
@@ -306,6 +410,9 @@ async function runUnit(root, config, plan, session, unitId, budgets) {
 
     const done = unitLooksComplete(root, unit, { unitTurns });
     if (done) {
+      session.unitTurns = session.unitTurns || {};
+      session.unitTurns[unitId] = unitTurns;
+      if (applyHumanGate(root, config, session, unitId).moveOn) return null;
       const panel = await runPanel(root, config, {
         cadence: 'unit',
         unitId,

@@ -9,6 +9,9 @@ import {
   changedFiles,
   resolveHarnessEnv,
 } from './common.mjs';
+import { matchHumanRequired, annotateReport, collectHumanInputs } from '../review/human-required.mjs';
+import { survivorsToFindings, mutationWhere } from './mutation-survivors.mjs';
+import { appendBacklog } from '../panel/backlog.mjs';
 
 const TIER_RANK = { edit: 0, turn: 1, commit: 2, manual: 99 };
 
@@ -33,7 +36,8 @@ export async function runChecks(root, config, opts) {
   const deferredToCi = [];
   const skippedLocalOnly = [];
   for (const s of sensors) {
-    const where = s.where || ['local', 'ci'];
+    const where =
+      s.name === 'mutation' ? mutationWhere(config, s.where || ['ci']) : s.where || ['local', 'ci'];
     if (where.includes(harnessEnv)) {
       inEnv.push(s);
       continue;
@@ -183,8 +187,54 @@ export async function runChecks(root, config, opts) {
     report.status = blockingFail ? 'fail' : 'pass';
   }
 
-  writeReport(root, report);
-  return report;
+  if (
+    (opts.tier === 'turn' || opts.tier === 'commit') &&
+    scopeFiles.length === 0 &&
+    report.status === 'pass'
+  ) {
+    report.status = 'no-changes';
+    report.changes = 0;
+  } else {
+    report.changes = scopeFiles.length;
+  }
+
+  const humanInputs = collectHumanInputs(root);
+  const human = matchHumanRequired(
+    [...new Set([...scopeFiles, ...humanInputs.files])],
+    humanInputs.diff,
+    config,
+  );
+  const annotated = annotateReport(report, human);
+  attachMutationFindings(root, config, annotated, scopeFiles);
+  writeReport(root, annotated);
+  return annotated;
+}
+
+function attachMutationFindings(root, config, report, scopeFiles) {
+  const candidates = [
+    process.env.HARNESS_MUTATION_REPORT,
+    path.join(root, 'reports', 'mutation', 'mutation.json'),
+  ].filter(Boolean);
+  for (const file of candidates) {
+    if (!fs.existsSync(file)) continue;
+    let parsed;
+    try {
+      parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch {
+      continue;
+    }
+    const findings = survivorsToFindings(parsed, { changedFiles: scopeFiles });
+    report.mutants = findings;
+    if (!findings.length) return;
+    appendBacklog(root, config, findings, null);
+    const note = findings
+      .map((f) => `- ${f.file}:${f.line} ${f.mutator} (${f.severity})`)
+      .join('\n');
+    const reviewPath = path.join(root, 'harness', 'state', 'review.md');
+    fs.mkdirSync(path.dirname(reviewPath), { recursive: true });
+    fs.appendFileSync(reviewPath, `\n## Mutation survivors\n\n${note}\n`);
+    return;
+  }
 }
 
 /**

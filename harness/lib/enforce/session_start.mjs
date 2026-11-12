@@ -67,7 +67,6 @@ function checkAdapterFreshness(root, tool) {
   const marker = {
     cursor: path.join(root, '.cursor', 'hooks.json'),
     claude: path.join(root, '.claude', 'settings.json'),
-    codex: path.join(root, '.codex', 'hooks.json'),
   }[tool];
   if (!marker || !fs.existsSync(marker)) {
     return { ok: false, detail: `adapter missing; run ./verify.sh --render` };

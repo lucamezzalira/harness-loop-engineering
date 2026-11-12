@@ -53,21 +53,25 @@ export function partitionByPolicy(merged, blockAt = ['P0', 'P1']) {
 export function renderReviewTable({
   blocking,
   backlogged,
+  shadow = [],
   unitId = '-',
   cycle = 1,
   diffRange = '?',
 }) {
   const lines = [
-    `Review: ${blocking.length} blocking, ${backlogged.length} backlogged           unit ${unitId} · cycle ${cycle} · diff ${diffRange}`,
+    `Review: ${blocking.length} blocking, ${backlogged.length} backlogged, ${shadow.length} shadow           unit ${unitId} · cycle ${cycle} · diff ${diffRange}`,
     '',
     ' SEV  ROLE      FILE:LINE                      FINDING',
   ];
   for (const f of blocking) {
     lines.push(formatRow(f));
   }
-  if (blocking.length && backlogged.length) lines.push(' ---');
+  if (blocking.length && (backlogged.length || shadow.length)) lines.push(' ---');
   for (const f of backlogged) {
     lines.push(formatRow(f));
+  }
+  for (const f of shadow) {
+    lines.push(formatRow({ ...f, severity: f.severity || 'P2' }));
   }
   return lines.join('\n') + '\n';
 }

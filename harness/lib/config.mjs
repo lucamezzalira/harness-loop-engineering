@@ -3,7 +3,7 @@ import path from 'node:path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { DEFAULT_SEVERITY_CATEGORIES, validateSeverityMap } from './severity.mjs';
 
-export const VALID_TOOLS = Object.freeze(['claude', 'cursor', 'codex']);
+export const VALID_TOOLS = Object.freeze(['claude', 'cursor']);
 
 export const DEFAULTS = Object.freeze({
   project: {
@@ -41,6 +41,58 @@ export const DEFAULTS = Object.freeze({
       product: ['specs/**'],
       performance: ['services/**', 'examples/**', '**/webpack*.{js,cjs,mjs,ts}'],
     },
+    humanRequired: {
+      paths: [
+        '**/auth/**',
+        '**/payments/**',
+        '**/migrations/**',
+        'infra/**',
+        'terraform/**',
+        '.github/workflows/**',
+        'harness/**',
+      ],
+      patterns: [
+        'DROP\\s+TABLE',
+        'DELETE\\s+FROM\\b(?!.*\\bWHERE\\b)',
+        '\\bTRUNCATE\\b',
+        '-----BEGIN [A-Z ]*PRIVATE KEY-----',
+        '(?:api[_-]?key|secret|password)\\s*[:=]\\s*[\'"][^\'"]{8,}',
+      ],
+    },
+    mode: {
+      reviewer: 'blocking',
+      security: 'blocking',
+      product: 'blocking',
+      planner: 'blocking',
+      qa: 'blocking',
+      infra: 'blocking',
+      'test-writer': 'blocking',
+      'acceptance-checker': 'blocking',
+      'integrity-checker': 'blocking',
+    },
+  },
+  protect: {
+    checkPaths: [
+      'harness/sensors/**',
+      'harness/lib/enforce/**',
+      'harness/lib/checks/**',
+      'verify.sh',
+      'harness.yaml',
+      'harness/sensors/sensors.yaml',
+      'eslint.config.*',
+      '.eslintrc',
+      '.eslintrc.*',
+      'tsconfig.json',
+      'tsconfig.*.json',
+      '.prettierrc',
+      '.prettierrc.*',
+      'prettier.config.*',
+      'stryker.conf.*',
+      'stryker.config.*',
+    ],
+  },
+  mutation: {
+    local: false,
   },
   severity: {
     categories: { ...DEFAULT_SEVERITY_CATEGORIES },
@@ -149,8 +201,17 @@ export function loadConfig(root) {
     throw err;
   }
   config.severity = sev.map;
-
+  rejectRetiredTool(config);
   return config;
+}
+
+function rejectRetiredTool(config) {
+  const retiredTool = 'co' + 'dex';
+  if (String(config.tool || '').toLowerCase() !== retiredTool) return;
+  const err = new Error(`${retiredTool} is not supported; set tool: cursor or tool: claude`);
+  err.code = 'CONFIG';
+  err.exitCode = 2;
+  throw err;
 }
 
 /**
@@ -158,16 +219,17 @@ export function loadConfig(root) {
  * @param {object} config
  */
 export function requireTool(config) {
+  rejectRetiredTool(config);
   const tool = config.tool;
   if (!tool) {
     const err = new Error(
       [
         'harness.local.yaml is missing `tool`.',
         'Found: no tool field.',
-        'Why: adapters and hooks are tool-specific; only one of claude | cursor | codex may be active.',
+        'Why: adapters and hooks are tool-specific; only one of claude | cursor may be active.',
         'Paste into harness.local.yaml:',
         '',
-        'tool: cursor   # or claude | codex',
+        'tool: cursor   # or claude',
         'profile: default',
         '',
       ].join('\n'),

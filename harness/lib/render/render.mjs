@@ -28,7 +28,6 @@ export async function renderAdapter(root, config, { checkOnly = false } = {}) {
   const outDirs = {
     cursor: path.join(root, '.cursor'),
     claude: path.join(root, '.claude'),
-    codex: path.join(root, '.codex'),
   };
 
   // Mutual exclusive: remove other tool dirs when rendering
@@ -245,21 +244,7 @@ function buildFiles(root, config, tool) {
     };
   }
 
-  return {
-    'hooks.json':
-      HEADER +
-      JSON.stringify(
-        {
-          session_start: 'HARNESS_TOOL=codex HARNESS_IN_HOOK=1 ./verify.sh --hook',
-          pre_tool: 'HARNESS_TOOL=codex HARNESS_IN_HOOK=1 ./verify.sh --hook',
-          post_tool: 'HARNESS_TOOL=codex HARNESS_IN_HOOK=1 ./verify.sh --hook',
-          stop: 'HARNESS_TOOL=codex HARNESS_IN_HOOK=1 ./verify.sh --hook',
-        },
-        null,
-        2,
-      ) +
-      '\n',
-  };
+  throw new Error(`render has no adapter for tool: ${tool}`);
 }
 
 function ensureClaudeMd(root) {

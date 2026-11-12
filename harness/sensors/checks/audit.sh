@@ -3,6 +3,10 @@
 set -euo pipefail
 PM=$(node -e 'const c=JSON.parse(process.env.HARNESS_CONFIG_JSON||"{}");process.stdout.write(c.project?.packageManager||"npm")')
 command -v "$PM" >/dev/null 2>&1 || { echo "$PM not available for audit" >&2; exit 3; }
+if [ -n "${HARNESS_AUDIT_FIXTURE:-}" ]; then
+  grep -Eq '"severity": "(high|critical)"' "$HARNESS_AUDIT_FIXTURE" && { echo "audit: high or critical advisory" >&2; exit 1; }
+  echo "audit fixture clean"; exit 0
+fi
 case "$PM" in
   pnpm) exec pnpm audit --audit-level high ;;
   yarn) exec yarn npm audit --level high ;;

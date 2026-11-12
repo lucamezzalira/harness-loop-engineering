@@ -1,5 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { renderReviewMetrics } from './accounting-review.mjs';
 
 export function readSession(root) {
   const p = path.join(root, 'harness', 'state', 'session.json');
@@ -90,7 +92,22 @@ export function renderReport(root, sessionId) {
     lines.push(`  backlogged     ${b.items?.length || 0} (P2: ${p2}, P3: ${p3})`);
   }
   lines.push(`  stopped        ${session.stopReason || 'n/a'}`);
+  lines.push('');
+  lines.push(renderReviewMetrics(session, { revertRate: gitRevertRate(root) }));
   return lines.join('\n') + '\n';
+}
+
+function gitRevertRate(root) {
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const log = spawnSync('git', ['log', `--since=${since}`, '--pretty=%s'], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  if (log.status !== 0) return { value: 'unknown', estimated: true };
+  const subjects = (log.stdout || '').split('\n').filter(Boolean);
+  const reverts = subjects.filter((s) => s.startsWith('Revert')).length;
+  const value = subjects.length ? `${reverts}/${subjects.length}` : '0/0';
+  return { value, estimated: false };
 }
 
 function formatDuration(ms) {

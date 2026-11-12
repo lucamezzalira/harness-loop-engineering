@@ -1,4 +1,6 @@
 import path from 'node:path';
+import { loadConfig } from '../config.mjs';
+import { checkPathsFromConfig, pathIsProtected, DEFAULT_CHECK_PATHS } from '../checks/check-integrity.mjs';
 
 const WRITE_TOOLS = new Set([
   'write',
@@ -32,6 +34,9 @@ export function preTool(root, payload) {
   const isWrite = WRITE_TOOLS.has(toolKey) || toolKey.includes('write') || toolKey.includes('edit');
 
   if (isShell) {
+    if (commandSkipsHooks(command)) {
+      reasons.push('refused: command skips hooks');
+    }
     if (
       /rm\s+(-[^\s]*f[^\s]*\s+.*-r|-r[^\s]*\s+.*-f|-[^\s]*rf|-rf)/.test(command) ||
       /rm\s+-rf\b/.test(command)
@@ -67,6 +72,12 @@ export function preTool(root, payload) {
 
     if (rel.startsWith('..') || path.isAbsolute(rel)) {
       reasons.push(`refused: write outside tree (${filePath})`);
+    } else if (pathIsProtected(rel, loadCheckPaths(root))) {
+      if (!payload.explicitCheckEdit) {
+        reasons.push(
+          `refused: ${rel} is a protected check path. An explicit developer instruction is required (explicitCheckEdit).`,
+        );
+      }
     } else if (isGeneratedAdapterPath(rel)) {
       // Always allow hooks.json so a wedged adapter can be cleared without leaving the IDE.
       if (rel.endsWith('hooks.json') || rel.endsWith('hooks.env.md')) {
@@ -85,6 +96,30 @@ export function preTool(root, payload) {
   return { allow: true, reasons: [] };
 }
 
+export function commandSkipsHooks(command) {
+  const cmd = String(command || '');
+  if (/--no-verify\b/.test(cmd)) return true;
+  if (/\bHUSKY=0\b/.test(cmd)) return true;
+  if (/\bHARNESS_IN_HOOK=1\b/.test(cmd)) return true;
+  if (/git\s+-c\s+core\.hooksPath\b/.test(cmd)) return true;
+  return commitUsesShortNoVerify(cmd);
+}
+
+function commitUsesShortNoVerify(cmd) {
+  const match = cmd.match(/\bgit\s+commit\b([^|&;]*)/);
+  if (!match) return false;
+  const rest = match[1].replace(/"[^"]*"|'[^']*'/g, ' ');
+  return /(^|\s)-n(\s|$)/.test(rest);
+}
+
+function loadCheckPaths(root) {
+  try {
+    return checkPathsFromConfig(loadConfig(root));
+  } catch {
+    return [...DEFAULT_CHECK_PATHS];
+  }
+}
+
 function isShellTool(toolKey, command) {
   if (command) return true;
   return toolKey === 'shell' || toolKey === 'bash' || toolKey === 'terminal' || toolKey.includes('shell');
@@ -92,8 +127,6 @@ function isShellTool(toolKey, command) {
 
 function isGeneratedAdapterPath(rel) {
   return (
-    rel.startsWith('.cursor/') ||
-    rel.startsWith('.claude/') ||
-    rel.startsWith('.codex/')
+    rel.startsWith('.cursor/') || rel.startsWith('.claude/')
   );
 }

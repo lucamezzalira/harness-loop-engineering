@@ -67,13 +67,6 @@ async function tryHostTool({ tool, root, binding, systemPrompt, userPrompt, expe
       cmd: bin,
       args: ['--print', '--model', binding.modelId, prompt],
     });
-  } else if (tool === 'codex') {
-    const bin = which('codex');
-    if (!bin) return { ok: false, error: 'codex CLI not on PATH' };
-    attempts.push({
-      cmd: bin,
-      args: ['exec', '--model', binding.modelId, prompt],
-    });
   } else {
     return { ok: false, error: `unknown tool ${tool}` };
   }

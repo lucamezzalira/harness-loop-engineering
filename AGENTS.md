@@ -1,6 +1,6 @@
 # Harness and Loop Engineering
 
-Reference implementation for a Node harness that renders for Claude, Cursor and Codex.
+Reference implementation for a Node harness that renders for Claude and Cursor.
 JavaScript (ESM) on Node 20+, npm.
 
 ## Setup commands
@@ -25,7 +25,7 @@ only compiles is not done.
 - `harness/state/` gitignored session and cost state
 - `docs/adr/` architecture decisions, indexed at docs/adr/README.md
 - `specs/` per-feature PRDs and acceptance.json
-- `.claude/`, `.cursor/`, `.codex/` rendered from harness/render/
+- `.claude/` and `.cursor/` rendered from harness/render/
 
 ## Architecture
 The standing decisions live in `docs/adr/`. Read `docs/adr/README.md`
