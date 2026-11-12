@@ -74,6 +74,23 @@ function untrackedAdded(root, files) {
   return chunks.join('\n');
 }
 
+function patternHits(pattern, text) {
+  switch (pattern) {
+    case 'DROP\\s+TABLE':
+      return /DROP\s+TABLE/i.test(text);
+    case 'DELETE\\s+FROM\\b(?!.*\\bWHERE\\b)':
+      return /DELETE\s+FROM\b(?!.*\bWHERE\b)/i.test(text);
+    case '\\bTRUNCATE\\b':
+      return /\bTRUNCATE\b/i.test(text);
+    case '-----BEGIN [A-Z ]*PRIVATE KEY-----':
+      return /-----BEGIN [A-Z ]*PRIVATE KEY-----/i.test(text);
+    case '(?:api[_-]?key|secret|password)\\s*[:=]\\s*[\'"][^\'"]{8,}':
+      return /(?:api[_-]?key|secret|password)\s*[:=]\s*['"][^'"]{8,}/i.test(text);
+    default:
+      return false;
+  }
+}
+
 export function matchHumanRequired(files, diff, config) {
   const { paths, patterns } = humanRequiredConfig(config);
   const matchedPaths = [];
@@ -84,13 +101,9 @@ export function matchHumanRequired(files, diff, config) {
   const matchedPatterns = [];
   for (const row of addedLines(diff)) {
     for (const pattern of patterns) {
-      let re;
-      try {
-        re = new RegExp(pattern, 'i');
-      } catch {
-        continue;
+      if (patternHits(pattern, row.text) && !matchedPatterns.includes(pattern)) {
+        matchedPatterns.push(pattern);
       }
-      if (re.test(row.text) && !matchedPatterns.includes(pattern)) matchedPatterns.push(pattern);
     }
   }
   const required = matchedPaths.length > 0 || matchedPatterns.length > 0;

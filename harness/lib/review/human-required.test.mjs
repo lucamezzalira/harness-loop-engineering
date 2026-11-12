@@ -4,8 +4,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { loadConfig } from '../config.mjs';
 import { applyHumanGate, isTerminalUnitStatus } from '../plan/loop.mjs';
 import { annotateReport, lockHumanReview, matchHumanRequired } from './human-required.mjs';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 
 function gitRepo() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-human-'));
@@ -53,6 +57,9 @@ test('A-12 a DROP TABLE diff requires human review on a passing report', () => {
   const report = annotateReport({ status: 'pass', tier: 'turn' }, match);
   assert.equal(report.status, 'pass');
   assert.equal(report.humanReview.status, 'required');
+  const fromYaml = matchHumanRequired(['db/migrate.sql'], diff, loadConfig(ROOT));
+  assert.equal(fromYaml.required, true);
+  assert.ok(fromYaml.patterns.length > 0);
 });
 
 test('A-13 a required human review stays required', () => {
