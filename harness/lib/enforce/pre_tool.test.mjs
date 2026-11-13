@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { preTool } from './pre_tool.mjs';
+import { appendCheckEditLog } from './allow-check-edit.mjs';
 
 const root = '/repo';
 
@@ -71,19 +72,18 @@ test('A-07 refuses a write on a protected check path without explicitCheckEdit',
 
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-check-edit-'));
   fs.mkdirSync(path.join(tmp, 'harness', 'state'), { recursive: true });
+  const record = {
+    paths: ['all'],
+    reason: 'developer instruction',
+    at: new Date().toISOString(),
+    by: 'developer',
+    sessionId: 's',
+  };
   fs.writeFileSync(
     path.join(tmp, 'harness', 'state', 'session.json'),
-    JSON.stringify({
-      id: 's',
-      explicitCheckEdit: {
-        paths: ['all'],
-        reason: 'developer instruction',
-        at: new Date().toISOString(),
-        by: 'developer',
-        sessionId: 's',
-      },
-    }),
+    JSON.stringify({ id: 's', explicitCheckEdit: record }),
   );
+  appendCheckEditLog(tmp, record);
   const allowed = preTool(tmp, {
     tool_name: 'Write',
     tool_input: { path: path.join(tmp, 'harness/sensors/checks/unit.sh'), contents: 'echo\n' },

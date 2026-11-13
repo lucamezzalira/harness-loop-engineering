@@ -91,6 +91,23 @@ protect:
     - 'prettier.config.*'
     - 'stryker.conf.*'
     - 'stryker.config.*'
+  # Shell writes under stateDir. Names map to literal matchers in
+  # harness/lib/enforce/state-guard.mjs. This file is itself a check path.
+  # pre_tool refuses these, plus any command containing --allow-check-edit.
+  # A person at the developer's terminal can still approve. The record's
+  # sha256 must match the last line of harness/state/check-edits.log.
+  stateDir: harness/state
+  stateWrites:
+    - redirect
+    - tee
+    - cp
+    - mv
+    - rm
+    - truncate
+    - sed-in-place
+    - node-eval
+    - python-eval
+    - allow-check-edit
 
 mutation:
   local: false

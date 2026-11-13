@@ -288,6 +288,8 @@ Two action flags together exit `2` naming both. Unknown flags exit `2` and print
 
 Precedence: `harness.local.yaml` (gitignored) > `harness.yaml` > defaults. No flag layer.
 
+Top-level keys in `harness.yaml`: `project` (service layout), `roles` (which panel roles are enabled), `review` (cadence, block list, human-required paths), `protect` (check paths and `stateWrites` under `harness/state`), `mutation` (survivor findings stay off the local turn), `severity` (category to P0–P3), `backlog` (cap on P2 and P3 items), `baseline` (ratchet counts), `verify` (fail-fast and retry), `logs` (optional event log), `limits` (`AGENTS.md` and skill body ceilings).
+
 ```yaml
 # harness.local.yaml — required before --render / --plan / --loop
 tool: cursor # claude | cursor — exactly one, no default
@@ -336,24 +338,24 @@ docs/adr/
 examples/two-services/    # deletable demo estate
 ```
 
-| Path                      | Role                                                                               |
-| ------------------------- | ---------------------------------------------------------------------------------- |
-| `verify.sh`               | Single entry point for tiers, plan/loop, install, render, and hooks                |
-| `AGENTS.md` / `CLAUDE.md` | Standing instructions for the coding agent (`CLAUDE.md` points at `AGENTS.md`)     |
-| `HANDOFF.md`              | Short session notes the next agent (or human) reads first                          |
-| `harness.yaml`            | Shared, committed behaviour: project, roles, severity, limits, baselines           |
-| `harness.local.yaml`      | Per-machine tool and profile; never committed                                      |
-| `harness/models.yaml`     | Provider and model IDs only; roles pick tiers, not model strings                   |
-| `harness/roles/`          | Reviewer / planner / security prompts rendered into the tool adapter               |
-| `harness/render/rules/`   | Standing constraints (Cursor-shaped); rendered into the tool adapter               |
-| `harness/skills/`         | Step-by-step playbooks (ADR, PRD, session start) linked into `.cursor` / `.claude` |
-| `harness/sensors/`        | Registry (`sensors.yaml`), thin shell checks, and failure guidance                 |
-| `harness/enforce/`        | Ship gate, pre-tool refuse, stop/edit hook logic                                   |
-| `harness/render/`         | Tool adapters (Cursor and Claude templates and hook scripts)                       |
-| `harness/state/`          | Machine output: `report.json`, plan, session, backlog (gitignored)                 |
-| `specs/<slug>/`           | PRD plus `acceptance.json` for a piece of work                                     |
-| `docs/adr/`               | Architecture decisions that outlive a unit                                         |
-| `examples/two-services/`  | Optional demo monorepo to try boundaries and checks                                |
+| Path                      | Role                                                                                                                                                                                            |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `verify.sh`               | Single entry point for tiers, plan/loop, install, render, and hooks                                                                                                                             |
+| `AGENTS.md` / `CLAUDE.md` | Standing instructions for the coding agent (`CLAUDE.md` points at `AGENTS.md`)                                                                                                                  |
+| `HANDOFF.md`              | Short session notes the next agent (or human) reads first                                                                                                                                       |
+| `harness.yaml`            | Shared, committed behaviour: project, roles, severity, limits, baselines                                                                                                                        |
+| `harness.local.yaml`      | Per-machine tool and profile; never committed                                                                                                                                                   |
+| `harness/models.yaml`     | Provider and model IDs only; roles pick tiers, not model strings                                                                                                                                |
+| `harness/roles/`          | Reviewer / planner / security prompts rendered into the tool adapter                                                                                                                            |
+| `harness/render/rules/`   | Standing constraints (Cursor-shaped); rendered into the tool adapter                                                                                                                            |
+| `harness/skills/`         | Step-by-step playbooks linked into `.cursor` / `.claude`. Folders: `start-a-session`, `fix-an-escape`, `write-a-prd`, `write-an-adr`, `add-an-endpoint`, `add-a-consumer`, `report-against-prd` |
+| `harness/sensors/`        | Registry (`sensors.yaml`), thin shell checks, and failure guidance                                                                                                                              |
+| `harness/enforce/`        | Ship gate, pre-tool refuse, stop/edit hook logic                                                                                                                                                |
+| `harness/render/`         | Tool adapters (Cursor and Claude templates and hook scripts)                                                                                                                                    |
+| `harness/state/`          | Machine output: `report.json`, plan, session, backlog (gitignored)                                                                                                                              |
+| `specs/<slug>/`           | PRD plus `acceptance.json` for a piece of work                                                                                                                                                  |
+| `docs/adr/`               | Architecture decisions that outlive a unit                                                                                                                                                      |
+| `examples/two-services/`  | Optional demo monorepo to try boundaries and checks                                                                                                                                             |
 
 ## Review panel
 
@@ -441,7 +443,11 @@ review:
 
 `./verify.sh --status` prints the effective `humanRequired.paths`.
 
-A protected check edit is separate. `./verify.sh --allow-check-edit` (interactive terminal only) records the globs and a one-line reason on the session. `pre_tool` and `check-integrity` allow a protected path only when that record covers it.
+A protected check edit is separate. `./verify.sh --allow-check-edit` (interactive terminal only) records the globs and a one-line reason on the session, and appends a sha256 of that record to `harness/state/check-edits.log`. `pre_tool` and `check-integrity` allow a protected path only when the record covers it and the hash matches the last log line. A mismatch is `check-weakened`.
+
+`pre_tool` also refuses any agent write under `harness/state/`, including a shell redirect, `tee`, `cp`, `mv`, `rm`, `truncate`, `sed -i`, `node -e`, and `python -c`. The names of those matchers are `protect.stateWrites` in `harness.yaml`. It refuses any shell command that contains `--allow-check-edit`. The harness's own Node processes still write that directory. None of this stops a person sitting at the developer's own terminal.
+
+Before a change is called done, `specs/<slug>/REPORT.md` has four sections (criteria, wiring proof, bypass check, known gaps) and ends with `acceptance-checker: PASS`. The skill is `report-against-prd`. The commit sensor `report-present` fails when every acceptance entry passes and that line is missing. The turn sensor `doc-drift` fails when a flag, sensor, role, skill, config key, or relative link in the docs has drifted.
 
 ## Course map
 
@@ -462,6 +468,20 @@ A protected check edit is separate. `./verify.sh --allow-check-edit` (interactiv
 | the retro                   | [`harness/lib/plan/retro.mjs`](harness/lib/plan/retro.mjs)                                         |
 | the trust ladder            | [`harness/lib/panel/trust.mjs`](harness/lib/panel/trust.mjs)                                       |
 | review metrics              | [`harness/lib/accounting.mjs`](harness/lib/accounting.mjs)                                         |
+
+## Sensors
+
+Each name has `harness/sensors/guidance/<name>.md` and a row in `harness/sensors/sensors.yaml`.
+
+`format`, `lint`, `context-budget`, `session-state`, `complexity`, `types`, `secrets`, `unit`, `env`, `env-declared`, `boundaries`, `contracts`, `acceptance`, `adr-frontmatter`, `adr-index`, `diff-scope`, `check-integrity`, `rule-shape`, `doc-drift`, `deadcode`, `duplication`, `audit`, `sast`, `mutation`, `prsize`, `report-present`, `runtime-drift`.
+
+## What changed
+
+[PR #2](https://github.com/lucamezzalira/harness-loop-engineering/pull/2) added the checker roles. [PR #3](https://github.com/lucamezzalira/harness-loop-engineering/pull/3) aligned the harness with the course gates. [PR #4](https://github.com/lucamezzalira/harness-loop-engineering/pull/4) let a developer authorise a protected check edit from a terminal and turned the course gates on in this repo. This PRD closes the hole that let an agent write that approval itself, requires a reviewed report before a spec is called done, and checks that the docs still name real flags.
+
+- Course alignment: [specs/align-harness-with-course/acceptance.json](specs/align-harness-with-course/acceptance.json), [report](specs/align-harness-with-course/REPORT.md)
+- Follow-up fixes: [specs/followup-fixes/acceptance.json](specs/followup-fixes/acceptance.json), [report](specs/followup-fixes/REPORT.md)
+- Close the gaps: [specs/close-the-gaps/PRD.md](specs/close-the-gaps/PRD.md), [report](specs/close-the-gaps/REPORT.md)
 
 ## License
 

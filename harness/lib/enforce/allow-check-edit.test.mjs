@@ -5,7 +5,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { allowCheckEdit } from './allow-check-edit.mjs';
+import { AGENT_ENV_MARKERS, allowCheckEdit } from './allow-check-edit.mjs';
+import { checkEditLogLine } from './check-edit-record.mjs';
+
+function developerEnv(extra = {}) {
+  const env = { ...process.env };
+  for (const name of AGENT_ENV_MARKERS) delete env[name];
+  delete env.HARNESS_IN_HOOK;
+  return { ...env, ...extra };
+}
 import { preTool } from './pre_tool.mjs';
 import { evaluateCheckIntegrity } from '../checks/check-integrity.mjs';
 import { CHECK_EDIT_TTL_MS } from './check-edit-record.mjs';
@@ -68,6 +76,7 @@ test('A-36 a simulated TTY records harness.yaml and pre_tool honours that glob',
   const recorded = await allowCheckEdit(tmp, {
     isTTY: () => true,
     by: 'Test User',
+    env: developerEnv(),
     ask: async () => answers.shift(),
   });
   assert.equal(recorded.exitCode, 0);
@@ -96,14 +105,17 @@ test('A-36 a simulated TTY records harness.yaml and pre_tool honours that glob',
 
 test('A-37 check-integrity allows only the recorded protected paths', () => {
   const session = liveRecord(['harness.yaml']);
+  const logText = checkEditLogLine(session.explicitCheckEdit);
   const only = evaluateCheckIntegrity({
     nameStatus: ['M\tharness.yaml'],
     session,
+    logText,
   });
   assert.equal(only.exitCode, 0);
   const extra = evaluateCheckIntegrity({
     nameStatus: ['M\tharness.yaml', 'M\tharness/sensors/checks/unit.sh'],
     session,
+    logText,
   });
   assert.equal(extra.exitCode, 1);
   assert.match(extra.findings.map((f) => f.file).join('\n'), /unit\.sh/);
@@ -215,6 +227,7 @@ test('A-39 the authorisation is in --report and the wave retro', async () => {
     const recorded = await allowCheckEdit(tmp, {
       isTTY: () => true,
       by: 'Test User',
+      env: developerEnv(),
       ask: async () => answers.shift(),
     });
     assert.equal(recorded.exitCode, 0);

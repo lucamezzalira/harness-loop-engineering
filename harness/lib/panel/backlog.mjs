@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { readSession, writeSession } from '../accounting.mjs';
+import { newAdhocSession } from '../enforce/adhoc-session.mjs';
 import { isTTY, prompt } from '../tty.mjs';
 
 function backlogPath(root) {
@@ -139,11 +140,7 @@ export async function triageBacklog(root, io = {}) {
   }
   const data = readBacklog(root);
   const ask = io.ask || ((q) => prompt(q, { defaultAnswer: 'keep', nonInteractive: 'keep' }));
-  const session = readSession(root) || {
-    id: `adhoc-${Date.now().toString(36)}`,
-    dismissedByRole: {},
-    reviewFindings: [],
-  };
+  const session = readSession(root) || newAdhocSession(root, io.env || process.env);
   session.dismissedByRole = session.dismissedByRole || {};
   for (const item of data.items) {
     if (item.outcome === 'dismissed' || item.outcome === 'promoted' || item.outcome === 'fixed') {

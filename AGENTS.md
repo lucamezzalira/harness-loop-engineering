@@ -49,6 +49,7 @@ For anything beyond these lines the ADR is the source of truth.
 ## Boundaries
 
 - Never edit files under `harness/state/`, it is regenerated per session
+- The agent never runs `--allow-check-edit` and never writes `harness/state/`
 - Never modify an ADR whose status is `accepted`; supersede with a new
   ADR instead
 - Never install a new production dependency without an ADR

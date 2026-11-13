@@ -23,6 +23,12 @@ loop:
   maxSeconds: 1800
   maxCostUsd: 5.0
 
+# The agent never runs ./verify.sh --allow-check-edit and never writes
+# harness/state/. The developer runs that flag from their own terminal.
+# protect.stateWrites in harness.yaml names the shell writes pre_tool refuses.
+# A person at that terminal can still approve. The record hash must match
+# harness/state/check-edits.log.
+
 # Working on this harness repo: drop harness/** or every loop unit that
 # touches the harness ends needs-human. Arrays replace, they do not append.
 # A consuming repo should keep the shared default, which includes harness/**.
