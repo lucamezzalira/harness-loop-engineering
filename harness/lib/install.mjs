@@ -7,6 +7,12 @@ import { VALID_TOOLS, writeYaml } from './config.mjs';
 import { probeProvider } from './agents/invoke.mjs';
 import { renderAdapter } from './render/render.mjs';
 import { runChecks } from './checks/runner.mjs';
+import {
+  codeownersFile,
+  globsToCover,
+  readCodeowners,
+  uncoveredGlobs,
+} from './checks/codeowners.mjs';
 
 /**
  * --install: detect, never overwrite team files, audit, wait.
@@ -162,22 +168,33 @@ export function writeCodeownersIfAbsent(root, entries) {
   return { wrote: true, count: entries.length, file };
 }
 
-export async function offerCodeowners(root, config) {
-  if (!isTTY()) return { wrote: false, reason: 'non-tty' };
-  const paths = config?.review?.humanRequired?.paths || [];
-  const entries = [];
-  for (const pattern of paths) {
-    const owner = (
-      await prompt(`CODEOWNERS owner for ${pattern}? (empty skips) `, {
-        defaultAnswer: '',
-        nonInteractive: '',
-      })
-    ).trim();
-    if (!owner) continue;
-    entries.push({ path: pattern, owner });
+export async function offerCodeowners(root, config, io = {}) {
+  const interactive = io.isTTY ? io.isTTY() : isTTY();
+  const file = codeownersFile(root);
+  const existed = fs.existsSync(file);
+  if (!existed && interactive) {
+    const ask = io.ask || ((q) => prompt(q, { defaultAnswer: '', nonInteractive: '' }));
+    const entries = [];
+    for (const pattern of globsToCover(config)) {
+      const owner = String(
+        (await ask(`CODEOWNERS owner for ${pattern}? (empty skips) `)) || '',
+      ).trim();
+      if (!owner) continue;
+      entries.push({ path: pattern, owner });
+    }
+    if (entries.length) writeCodeownersIfAbsent(root, entries);
   }
-  if (!entries.length) return { wrote: false, reason: 'no owners' };
-  return writeCodeownersIfAbsent(root, entries);
+  const uncovered = uncoveredGlobs(config, readCodeowners(root));
+  const text = uncovered.length
+    ? `CODEOWNERS uncovered: ${uncovered.join(', ')}`
+    : 'CODEOWNERS uncovered: (none)';
+  console.log(text);
+  return {
+    wrote: !existed && fs.existsSync(file),
+    uncovered,
+    text,
+    reason: existed ? 'exists' : interactive ? 'interview' : 'non-tty',
+  };
 }
 
 function detectProject(root) {

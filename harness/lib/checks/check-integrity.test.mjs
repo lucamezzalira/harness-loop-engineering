@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import { evaluateCheckIntegrity } from './check-integrity.mjs';
@@ -60,6 +62,81 @@ test('A-09 deleted tests, skips, suppressions, and unprotected sensor edits fail
     ),
   });
   assert.equal(clean.exitCode, 0);
+});
+
+test('A-76 a local approval prints the early-warning line', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-warn-'));
+  const git = (args) => {
+    const result = spawnSync(
+      'git',
+      ['-c', 'user.email=t@example.com', '-c', 'user.name=Test', ...args],
+      {
+        cwd: tmp,
+        encoding: 'utf8',
+      },
+    );
+    assert.equal(result.status, 0, result.stderr);
+  };
+  git(['init']);
+  fs.writeFileSync(path.join(tmp, 'harness.yaml'), 'project:\n  name: base\n');
+  git(['add', 'harness.yaml']);
+  git(['commit', '-m', 'base']);
+  fs.writeFileSync(path.join(tmp, 'harness.yaml'), 'project:\n  name: next\n');
+  const record = {
+    paths: ['all'],
+    reason: 'local early warning',
+    at: new Date().toISOString(),
+    by: 'developer',
+    sessionId: 's',
+  };
+  fs.mkdirSync(path.join(tmp, 'harness', 'state'), { recursive: true });
+  fs.writeFileSync(
+    path.join(tmp, 'harness', 'state', 'session.json'),
+    JSON.stringify({ id: 's', explicitCheckEdit: record }) + '\n',
+  );
+  fs.writeFileSync(path.join(tmp, 'harness', 'state', 'check-edits.log'), checkEditLogLine(record));
+  const ran = spawnSync(
+    process.execPath,
+    [path.join(ROOT, 'harness', 'lib', 'checks', 'check-integrity.mjs')],
+    {
+      cwd: ROOT,
+      encoding: 'utf8',
+      env: { ...process.env, HARNESS_ROOT: tmp },
+    },
+  );
+  assert.equal(ran.status, 0, ran.stderr || ran.stdout);
+  assert.match(ran.stdout, /local approval only; CI protected-change decides on the pull request/);
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
+
+test('A-77 local approval is not described as the decision', () => {
+  const forbidden = [
+    'proof of approval',
+    'authoritative approval',
+    'can still approve',
+    'the record approves',
+    'local record is the approval',
+  ];
+  const hits = [];
+  for (const phrase of forbidden) {
+    const listed = spawnSync(
+      'grep',
+      [
+        '-R',
+        '-i',
+        '-n',
+        '-F',
+        '--exclude=check-integrity.test.mjs',
+        '-e',
+        phrase,
+        'harness',
+        'docs',
+      ],
+      { cwd: ROOT, encoding: 'utf8' },
+    );
+    if (listed.stdout && listed.stdout.trim()) hits.push(listed.stdout.trim());
+  }
+  assert.deepEqual(hits, []);
 });
 
 test('A-10 check-integrity is a blocking turn sensor for local and ci', () => {

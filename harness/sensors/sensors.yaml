@@ -188,6 +188,20 @@ sensors:
     enabled: true
     missing: n/a
 
+  - name: protected-change
+    tier: commit
+    where: [ci]
+    blocking: true
+    enabled: true
+    missing: n/a
+
+  - name: codeowners-coverage
+    tier: turn
+    where: [local, ci]
+    blocking: true
+    enabled: true
+    missing: n/a
+
   - name: runtime-drift
     tier: manual
     where: [ci]

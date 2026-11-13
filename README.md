@@ -443,7 +443,7 @@ review:
 
 `./verify.sh --status` prints the effective `humanRequired.paths`.
 
-A protected check edit is separate. `./verify.sh --allow-check-edit` (interactive terminal only) records the globs and a one-line reason on the session, and appends a sha256 of that record to `harness/state/check-edits.log`. `pre_tool` and `check-integrity` allow a protected path only when the record covers it and the hash matches the last log line. A mismatch is `check-weakened`.
+A protected check edit is separate. `./verify.sh --allow-check-edit` (interactive terminal only) records the globs and a one-line reason on the session, and appends a sha256 of that record to `harness/state/check-edits.log`. `pre_tool` and `check-integrity` treat that record as a local early warning: they allow a protected path only when the record covers it and the hash matches the last log line. A mismatch is `check-weakened`. The record is not the decision. The CI-only sensor `protected-change` decides on the pull request. `./verify.sh --status` lists it under `CI-only`, and it does not run locally.
 
 `pre_tool` also refuses any agent write under `harness/state/`, including a shell redirect, `tee`, `cp`, `mv`, `rm`, `truncate`, `sed -i`, `node -e`, and `python -c`. The names of those matchers are `protect.stateWrites` in `harness.yaml`. It refuses any shell command that contains `--allow-check-edit`. The harness's own Node processes still write that directory. None of this stops a person sitting at the developer's own terminal.
 
@@ -473,7 +473,7 @@ Before a change is called done, `specs/<slug>/REPORT.md` has four sections (crit
 
 Each name has `harness/sensors/guidance/<name>.md` and a row in `harness/sensors/sensors.yaml`.
 
-`format`, `lint`, `context-budget`, `session-state`, `complexity`, `types`, `secrets`, `unit`, `env`, `env-declared`, `boundaries`, `contracts`, `acceptance`, `adr-frontmatter`, `adr-index`, `diff-scope`, `check-integrity`, `rule-shape`, `doc-drift`, `deadcode`, `duplication`, `audit`, `sast`, `mutation`, `prsize`, `report-present`, `runtime-drift`.
+`format`, `lint`, `context-budget`, `session-state`, `complexity`, `types`, `secrets`, `unit`, `env`, `env-declared`, `boundaries`, `contracts`, `acceptance`, `adr-frontmatter`, `adr-index`, `diff-scope`, `check-integrity`, `rule-shape`, `doc-drift`, `deadcode`, `duplication`, `audit`, `sast`, `mutation`, `prsize`, `report-present`, `protected-change`, `codeowners-coverage`, `runtime-drift`.
 
 ## What changed
 

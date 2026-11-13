@@ -119,5 +119,9 @@ export async function allowCheckEdit(root, io = {}) {
   session.explicitCheckEdit = record;
   writeSession(root, session);
   appendCheckEditLog(root, record);
-  return { exitCode: 0, text: `recorded check edit for ${paths.join(', ')}`, record };
+  return {
+    exitCode: 0,
+    text: `recorded check edit for ${paths.join(', ')}. Early warning only; CI protected-change decides on the pull request.`,
+    record,
+  };
 }
