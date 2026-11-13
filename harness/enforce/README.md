@@ -18,6 +18,20 @@
 
 # gh pr review --approve, gh pr merge, gh label, and any gh api path
 
-# containing /labels, /reviews, or /merge. The hash of the record must match
+# containing /labels, /reviews, or /merge. It also refuses gh pr review -a,
+
+# --approve, -r, and --request-changes (a comment with -c stays allowed), a
+
+# gh api graphql query that contains mutation, and curl, wget, http, node -e,
+
+# or python -c when the call is a non-GET to api.github.com or names
+
+# GITHUB_TOKEN, GH_TOKEN, or GH_ENTERPRISE_TOKEN. The list is pattern matching,
+
+# so a new spelling can still get through. CI protected-change decides on the
+
+# pull request. Keeping tokens out of the agent's environment is the real defence.
+
+# The hash of the record must match
 
 # harness/state/check-edits.log or check-integrity reports check-weakened.

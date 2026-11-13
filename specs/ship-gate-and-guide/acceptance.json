@@ -1,0 +1,40 @@
+{
+  "entries": [
+    {
+      "id": "A-95",
+      "description": "pre_tool refuses short review flags, a GraphQL mutation, and non-GET or token-bearing calls to api.github.com.",
+      "passes": true,
+      "test": "harness/lib/enforce/pre_tool.test.mjs"
+    },
+    {
+      "id": "A-96",
+      "description": "Review comments, a read-only GraphQL query, a token-free GET, and gh pr view stay allowed.",
+      "passes": true,
+      "test": "harness/lib/enforce/pre_tool.test.mjs"
+    },
+    {
+      "id": "A-97",
+      "description": "The enforce README, guide step 10, and the failure-modes doc name the pattern-matching limit and the token rule.",
+      "passes": true,
+      "test": "harness/lib/checks/ship-gate-and-guide.test.mjs"
+    },
+    {
+      "id": "A-98",
+      "description": "Guide step 5 shows the spec tree, a PRD excerpt, acceptance JSON that parses, and --plan.",
+      "passes": true,
+      "test": "harness/lib/checks/ship-gate-and-guide.test.mjs"
+    },
+    {
+      "id": "A-99",
+      "description": "Guide step 13 shows the interview, a failing then passing node --test run, and an ESC entry that parses.",
+      "passes": true,
+      "test": "harness/lib/checks/ship-gate-and-guide.test.mjs"
+    },
+    {
+      "id": "A-100",
+      "description": "The guide command-runner test still passes after the new guide commands.",
+      "passes": true,
+      "test": "harness/lib/checks/ship-gate-and-guide.test.mjs"
+    }
+  ]
+}

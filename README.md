@@ -35,7 +35,7 @@ node scripts/smoke-runtime-drift.js
 
 CI's `protected-change` check decides, on the pull request, whether a protected change was approved. Local hooks are an early warning. They are only as strong as the hooks that tool actually sends. Cursor's adapter has `beforeShellExecution` and `afterFileEdit`. It has no before-write hook, so a Write of `harness/state/session.json` never reaches `pathUnderState`.
 
-A solo maintainer (the only owner of the file) can add the label `protected-change-approved`. A new push clears that label. The `clear-protected-label` job runs on `synchronize`, and the `verify` job waits for it. A `labeled` event older than the pull request's `updated_at` is treated as absent.
+A local `--allow-check-edit` approval covers every change to its paths until it expires (12 hours or end of session), not one specific change. A solo maintainer (the only owner of the file) can add the label `protected-change-approved`. A new push clears that label. The `clear-protected-label` job runs on `synchronize`, and the `verify` job waits for it. A `labeled` event older than the pull request's `updated_at` is treated as absent.
 
 Without branch protection, a red `protected-change` does not block a merge. Optional: in the GitHub repo, open Settings, then Branches, and require the `protected-change` status check before merging.
 
