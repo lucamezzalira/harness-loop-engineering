@@ -93,16 +93,29 @@ protect:
     - 'stryker.config.*'
     - .github/CODEOWNERS
   # Commands the ship gate refuses unless the developer gave an explicit instruction.
-  # pre_tool matches every token in a row. Editing this list is a protected check path.
+  # Editing this list is a protected check path. ship-commands.mjs interprets the rows.
+  # gh pr review matches -a, --approve, -r, and --request-changes. -c and --comment stay allowed.
+  # `gh api graphql mutation` matches a query whose text contains the mutation keyword.
+  # curl, wget, http, `node -e`, and `python -c` match a non-GET to api.github.com,
+  # or any use of GITHUB_TOKEN, GH_TOKEN, or GH_ENTERPRISE_TOKEN.
   shipCommands:
     - gh pr edit --add-label
     - gh pr edit --remove-label
     - gh pr review --approve
+    - gh pr review -a
+    - gh pr review --request-changes
+    - gh pr review -r
     - gh pr merge
     - gh label
     - gh api /labels
     - gh api /reviews
     - gh api /merge
+    - gh api graphql mutation
+    - curl
+    - wget
+    - http
+    - node -e
+    - python -c
   # Shell writes under stateDir. Names map to literal matchers in
   # harness/lib/enforce/state-guard.mjs. This file is itself a check path.
   # pre_tool refuses these, plus any command containing --allow-check-edit.

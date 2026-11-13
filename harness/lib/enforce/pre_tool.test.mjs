@@ -63,6 +63,8 @@ test('A-88 the ship gate refuses label, review, and merge commands', () => {
   const commands = [
     'gh pr edit 6 --add-label protected-change-approved',
     'gh pr review 6 --approve',
+    '/usr/bin/gh pr review --approve',
+    'gh -R owner/repo pr review --approve',
     'gh pr merge 6',
     'gh label create x',
     'gh api repos/o/r/issues/6/labels -f labels[]=x',
@@ -72,6 +74,35 @@ test('A-88 the ship gate refuses label, review, and merge commands', () => {
     const refused = preTool(root, { tool_name: 'Shell', tool_input: { command } });
     assert.equal(refused.allow, false, command);
     assert.match(refused.reasons.join('\n'), /ship gate/, command);
+  }
+});
+
+test('A-95 short review flags, GraphQL mutations, and GitHub HTTP writes are refused', () => {
+  const commands = [
+    'gh pr review 6 -a',
+    'gh pr review 6 --request-changes -b x',
+    'gh api graphql -f query=\'mutation{mergePullRequest(input:{pullRequestId:"x"}){clientMutationId}}\'',
+    'curl -X PUT https://api.github.com/repos/o/r/pulls/6/merge',
+    'curl -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/user',
+    'wget --method=POST https://api.github.com/repos/o/r/issues/6/labels',
+  ];
+  for (const command of commands) {
+    const refused = preTool(root, { tool_name: 'Shell', tool_input: { command } });
+    assert.equal(refused.allow, false, command);
+    assert.match(refused.reasons.join('\n'), /ship gate/, command);
+  }
+});
+
+test('A-96 comments, read-only GraphQL, and a token-free GET stay allowed', () => {
+  const commands = [
+    'gh pr review 6 -c -b "looks fine"',
+    "gh api graphql -f query='query{viewer{login}}'",
+    'curl https://api.github.com/repos/o/r',
+    'gh pr view 6',
+  ];
+  for (const command of commands) {
+    const allowed = preTool(root, { tool_name: 'Shell', tool_input: { command } });
+    assert.equal(allowed.allow, true, command + JSON.stringify(allowed));
   }
 });
 

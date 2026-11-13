@@ -91,7 +91,71 @@ Read `harness/state/report.json` for the check list and `harness/state/review.md
 
 ## 5. Write a PRD
 
-Use the `write-a-prd` skill. It asks what the change is for, then writes `specs/<slug>/PRD.md` and `specs/<slug>/acceptance.json`. Each entry has an id, `passes: false`, and a test path. Do not mark an entry passing until that test is green.
+In the agent, invoke the `write-a-prd` skill. It asks one question at a time and writes nothing until you answer. A short interview looks like this:
+
+1. Who is the user, and what are they unable to do today? A developer cannot tell a repeated event from a new one, so the same delivery is stored twice.
+2. What behaviour counts as done? The same idempotency key stores one row. A different key stores another. Those are the acceptance ids.
+3. What is explicitly out of scope? Retries across two processes, and deleting a stored event.
+
+The skill then writes this tree. `<slug>` is the placeholder for the directory name. This repo already has `specs/example-idempotent-consumers/` in that shape.
+
+```text
+specs/<slug>/
+  PRD.md
+  acceptance.json
+```
+
+A trimmed `PRD.md`:
+
+```markdown
+# <slug>
+
+## Problem
+
+A repeated event is stored as if it were new.
+
+## Behaviour
+
+The same idempotency key stores one row. A different key stores a second row.
+
+## Non-goals
+
+Retries across two processes. Deleting a stored event.
+
+## Acceptance
+
+- A-01: the same key stores one row.
+- A-02: a different key stores a second row.
+```
+
+`acceptance.json` starts with `passes: false`. Do not mark an entry passing until that test is green. `placeholder.test.mjs` stands in for the test file you have not written yet.
+
+```json
+{
+  "entries": [
+    {
+      "id": "A-01",
+      "description": "The same idempotency key stores one row.",
+      "passes": false,
+      "test": "placeholder.test.mjs"
+    },
+    {
+      "id": "A-02",
+      "description": "A different key stores a second row.",
+      "passes": false,
+      "test": "placeholder.test.mjs"
+    }
+  ]
+}
+```
+
+When the PRD is ready:
+
+```bash
+./verify.sh --plan
+```
+
+Success prints `Plan written to harness/state/plan.json. Nothing implemented until --loop.`
 
 ## 6. Plan and loop
 
@@ -141,7 +205,7 @@ A protected path (`protect.checkPaths` in `harness.yaml`, including `protect.shi
 ./verify.sh --allow-check-edit
 ```
 
-Run that from your own terminal. It asks for the paths and a one-line reason, writes the session record, and appends a hash to `harness/state/check-edits.log`. The agent is refused if it tries. The record is an early warning. CI still decides.
+Run that from your own terminal. It asks for the paths and a one-line reason, writes the session record, and appends a hash to `harness/state/check-edits.log`. The agent is refused if it tries. An approval covers every change to its paths until it expires (12 hours or end of session), not one specific change. The record is an early warning. CI still decides.
 
 Then open the pull request. A code owner approves the head commit, or, when you are the only owner, you add `protected-change-approved` after the push. A later push clears the label.
 
@@ -154,12 +218,16 @@ The ship gate refuses these unless you gave an explicit instruction in this sess
 - `git commit` and `git push`
 - `gh pr create`
 - `gh pr edit` with `--add-label` or `--remove-label`
-- `gh pr review` with `--approve`
+- `gh pr review` with `-a`, `--approve`, `-r`, or `--request-changes` (`-c` and `--comment` stay allowed)
 - `gh pr merge`
 - `gh label`
 - `gh api` whose path contains `/labels`, `/reviews`, or `/merge`
+- `gh api graphql` when the query contains `mutation`
+- `curl`, `wget`, `http`, `node -e`, or `python -c` that sends a non-GET request to `api.github.com`, or that names `GITHUB_TOKEN`, `GH_TOKEN`, or `GH_ENTERPRISE_TOKEN`
 
 `gh pr view` and `gh pr checks` stay allowed. You open the pull request yourself after you have said to ship. The hook's reason names the ship gate.
+
+The list is pattern matching, so a new spelling can still get through. CI's `protected-change` decides on the pull request. Keeping tokens out of the agent's environment is the real defence.
 
 ## 11. After the run
 
@@ -185,7 +253,40 @@ Remove that line and the id is required again.
 
 ## 13. When a bug escapes
 
-Use the `fix-an-escape` skill. Interview first, add a regression test, then fix the code. Do not start with the patch.
+In the agent, invoke the `fix-an-escape` skill. It asks one question at a time and writes nothing until you answer.
+
+1. What happened? A second delivery with the same idempotency key inserted another row.
+2. How do you reproduce it? Send the same event twice and count the rows.
+3. Which commit is known bad? The commit you name, for example `5524f0e` in this repo, or `<sha>` when you are showing the shape.
+
+Then add a regression test. `<test-file>` is the placeholder path. Run it and confirm it fails on the current tree:
+
+```text
+node --test <test-file>
+✖ escape reproduces (1.2ms)
+ℹ fail 1
+```
+
+Fix the cause. Run the same command again and confirm it passes:
+
+```text
+node --test <test-file>
+✔ escape reproduces (0.8ms)
+ℹ fail 0
+```
+
+Add an `ESC-NN` entry to `acceptance.json`. `ESC-01` is the placeholder id.
+
+```json
+{
+  "id": "ESC-01",
+  "description": "A second delivery with the same idempotency key does not insert another row.",
+  "passes": false,
+  "test": "<test-file>"
+}
+```
+
+This is a regression test for a bug that already escaped, not TDD: the test is written to fail on the current tree before the fix.
 
 ## 14. Troubleshooting
 
