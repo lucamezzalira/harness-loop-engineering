@@ -10,6 +10,8 @@
 
 # The developer runs that flag from their own terminal. A person at that
 
-# terminal can still approve. The hash of the record must match
+# terminal can still record a local early warning. CI protected-change decides
+
+# on the pull request. The hash of the record must match
 
 # harness/state/check-edits.log or check-integrity reports check-weakened.

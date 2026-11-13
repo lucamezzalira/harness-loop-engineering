@@ -89,6 +89,7 @@ export const DEFAULTS = Object.freeze({
       'prettier.config.*',
       'stryker.conf.*',
       'stryker.config.*',
+      '.github/CODEOWNERS',
     ],
     stateDir: 'harness/state',
     stateWrites: [

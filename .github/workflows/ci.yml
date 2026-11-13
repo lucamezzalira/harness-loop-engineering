@@ -2,12 +2,20 @@ name: Harness CI
 on:
   push:
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  pull_request_review:
+    types: [submitted, dismissed]
 
 jobs:
   verify:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
     env:
       HARNESS_ENV: ci
+      GITHUB_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -77,3 +85,20 @@ jobs:
           code=$?
           set -e
           test "$code" -eq 2
+
+  clear-protected-label:
+    if: github.event_name == 'pull_request' && github.event.action == 'synchronize'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      # Node built-ins only. Do not npm install here. The script must not import yaml.
+      - run: node harness/lib/checks/clear-protected-label.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

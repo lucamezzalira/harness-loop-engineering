@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig, formatAssignmentBlock, requireTool } from './config.mjs';
 import { runChecks, reportExitCode, printWhereSummary, skippedToolLine } from './checks/runner.mjs';
-import { resolveHarnessEnv } from './checks/common.mjs';
+import { loadSensors, resolveHarnessEnv } from './checks/common.mjs';
 import { readReport } from './report.mjs';
 import { formatPendingHumanReview } from './review/human-required.mjs';
 import { computeTreeHash } from './tree-hash.mjs';
@@ -142,6 +142,20 @@ async function readStdinJson() {
   }
 }
 
+function ciOnlyNames(root) {
+  const sensorsFile = path.join(root, 'harness', 'sensors', 'sensors.yaml');
+  if (!fs.existsSync(sensorsFile)) return [];
+  return loadSensors(root)
+    .filter(
+      (sensor) =>
+        sensor.enabled !== false &&
+        Array.isArray(sensor.where) &&
+        sensor.where.includes('ci') &&
+        !sensor.where.includes('local'),
+    )
+    .map((sensor) => sensor.name);
+}
+
 async function main() {
   let parsed;
   try {
@@ -243,6 +257,7 @@ async function main() {
       console.log(`prd: ${config.loop?.prd || '(none)'}`);
       const humanPaths = config.review?.humanRequired?.paths || [];
       console.log(`humanRequired.paths: ${humanPaths.join(', ')}`);
+      console.log(`CI-only: ${ciOnlyNames(ROOT).join(', ')}`);
       console.log('');
       console.log(formatAssignmentBlock(config));
       console.log('');

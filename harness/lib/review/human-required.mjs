@@ -77,7 +77,7 @@ function untrackedAdded(root, files) {
   return chunks.join('\n');
 }
 
-function patternHits(pattern, text) {
+export function patternHits(pattern, text) {
   switch (pattern) {
     case 'DROP\\s+TABLE':
       return /DROP\s+TABLE/i.test(text);

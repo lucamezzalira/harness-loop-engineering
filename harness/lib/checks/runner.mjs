@@ -205,8 +205,21 @@ export async function runChecks(root, config, opts) {
   );
   const annotated = annotateReport(report, human);
   attachMutationFindings(root, config, annotated, scopeFiles);
+  attachProtectedChange(root, annotated);
   writeReport(root, annotated);
   return annotated;
+}
+
+function attachProtectedChange(root, report) {
+  const ran = (report.checks || []).some((check) => check.name === 'protected-change');
+  if (!ran) return;
+  const file = path.join(root, 'harness', 'state', 'protected-change.json');
+  if (!fs.existsSync(file)) return;
+  try {
+    report.protectedChange = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    report.protectedChange = { status: 'harness-error' };
+  }
 }
 
 function attachMutationFindings(root, config, report, scopeFiles) {

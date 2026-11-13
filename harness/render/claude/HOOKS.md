@@ -19,7 +19,7 @@ Thin scripts under `.claude/hooks/*.sh` only:
 
 `hooks.enable` defaults to true. Override it in `harness.local.yaml`. `--render` writes `.claude/settings.json` and copies the scripts. First line of `CLAUDE.md` is `@AGENTS.md`.
 
-`PreToolUse` calls `pre_tool`, which refuses a write under `harness/state/` and any command containing `--allow-check-edit`. Claude Code sets `CLAUDECODE` and `CLAUDE_CODE_CHILD_SESSION` on the commands it spawns. Either marker refuses the flag, and so does `HARNESS_IN_HOOK=1`. A person at the developer's own terminal can still approve.
+`PreToolUse` calls `pre_tool`, which refuses a write under `harness/state/` and any command containing `--allow-check-edit`. Claude Code sets `CLAUDECODE` and `CLAUDE_CODE_CHILD_SESSION` on the commands it spawns. Either marker refuses the flag, and so does `HARNESS_IN_HOOK=1`. A person at the developer's own terminal can still record a local early warning. CI `protected-change` decides on the pull request.
 
 ## Recovery
 

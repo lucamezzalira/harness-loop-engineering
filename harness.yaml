@@ -91,11 +91,13 @@ protect:
     - 'prettier.config.*'
     - 'stryker.conf.*'
     - 'stryker.config.*'
+    - .github/CODEOWNERS
   # Shell writes under stateDir. Names map to literal matchers in
   # harness/lib/enforce/state-guard.mjs. This file is itself a check path.
   # pre_tool refuses these, plus any command containing --allow-check-edit.
-  # A person at the developer's terminal can still approve. The record's
-  # sha256 must match the last line of harness/state/check-edits.log.
+  # A person at the developer's terminal can still record a local early warning.
+  # That record is not the decision. CI protected-change decides on the pull request.
+  # The record's sha256 must match the last line of harness/state/check-edits.log.
   stateDir: harness/state
   stateWrites:
     - redirect

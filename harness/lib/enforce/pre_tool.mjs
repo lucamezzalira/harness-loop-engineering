@@ -99,7 +99,7 @@ export function preTool(root, payload) {
       )
     ) {
       reasons.push(
-        `refused: ${rel} is a protected check path. Record explicitCheckEdit with ./verify.sh --allow-check-edit.`,
+        `refused: ${rel} is a protected check path. Record explicitCheckEdit with ./verify.sh --allow-check-edit. That local record is an early warning. CI protected-change decides on the pull request.`,
       );
     } else if (isGeneratedAdapterPath(rel)) {
       // Always allow hooks.json so a wedged adapter can be cleared without leaving the IDE.

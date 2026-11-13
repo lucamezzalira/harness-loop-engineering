@@ -1,0 +1,88 @@
+{
+  "entries": [
+    {
+      "id": "A-64",
+      "description": "A pull request that changes harness.yaml with no reviews fails and names the file, the matched rule, and its owner.",
+      "passes": true,
+      "test": "harness/lib/checks/protected-change.test.mjs"
+    },
+    {
+      "id": "A-65",
+      "description": "An APPROVED review on the head SHA from a code owner who is not the author passes. The author's own review does not.",
+      "passes": true,
+      "test": "harness/lib/checks/protected-change.test.mjs"
+    },
+    {
+      "id": "A-66",
+      "description": "An APPROVED review on an older commit does not count.",
+      "passes": true,
+      "test": "harness/lib/checks/protected-change.test.mjs"
+    },
+    {
+      "id": "A-67",
+      "description": "The solo-maintainer label passes. A synchronize event runs the label-removal job and the check fails until the label is added again. A backdated committer date has no effect.",
+      "passes": true,
+      "test": "harness/lib/checks/protected-change.test.mjs"
+    },
+    {
+      "id": "A-68",
+      "description": "A label added by a user who is not in CODEOWNERS does not count.",
+      "passes": true,
+      "test": "harness/lib/checks/protected-change.test.mjs"
+    },
+    {
+      "id": "A-69",
+      "description": "Added lines that match review.humanRequired.patterns need approval even when the file is not on a protected path.",
+      "passes": true,
+      "test": "harness/lib/checks/protected-change.test.mjs"
+    },
+    {
+      "id": "A-70",
+      "description": "A pull request with no protected changes passes without calling the reviews or timeline APIs.",
+      "passes": true,
+      "test": "harness/lib/checks/protected-change.test.mjs"
+    },
+    {
+      "id": "A-71",
+      "description": "A push to the default branch with protected changes and no pull request fails. A push to a feature branch is skipped.",
+      "passes": true,
+      "test": "harness/lib/checks/protected-change.test.mjs"
+    },
+    {
+      "id": "A-72",
+      "description": "A missing GITHUB_TOKEN or a GitHub API error exits 2.",
+      "passes": true,
+      "test": "harness/lib/checks/protected-change.test.mjs"
+    },
+    {
+      "id": "A-73",
+      "description": ".github/CODEOWNERS exists and covers every protected glob, plus itself.",
+      "passes": true,
+      "test": "harness/lib/checks/codeowners-coverage.test.mjs"
+    },
+    {
+      "id": "A-74",
+      "description": "codeowners-coverage fails when a protected glob has no owner, and passes on this tree.",
+      "passes": true,
+      "test": "harness/lib/checks/codeowners-coverage.test.mjs"
+    },
+    {
+      "id": "A-75",
+      "description": "--install leaves an existing CODEOWNERS byte-identical and reports uncovered globs.",
+      "passes": true,
+      "test": "harness/lib/checks/codeowners-coverage.test.mjs"
+    },
+    {
+      "id": "A-76",
+      "description": "A check-integrity pass that relies on a local record prints the early-warning line.",
+      "passes": true,
+      "test": "harness/lib/checks/check-integrity.test.mjs"
+    },
+    {
+      "id": "A-77",
+      "description": "harness/ and docs/ do not call the local record the decision. The test lists the forbidden phrases.",
+      "passes": true,
+      "test": "harness/lib/checks/check-integrity.test.mjs"
+    }
+  ]
+}

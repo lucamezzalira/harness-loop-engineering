@@ -1,0 +1,25 @@
+# Owners for protect.checkPaths and review.humanRequired.paths.
+harness/sensors/** @lucamezzalira
+harness/lib/enforce/** @lucamezzalira
+harness/lib/checks/** @lucamezzalira
+verify.sh @lucamezzalira
+harness.yaml @lucamezzalira
+harness/sensors/sensors.yaml @lucamezzalira
+eslint.config.* @lucamezzalira
+.eslintrc @lucamezzalira
+.eslintrc.* @lucamezzalira
+tsconfig.json @lucamezzalira
+tsconfig.*.json @lucamezzalira
+.prettierrc @lucamezzalira
+.prettierrc.* @lucamezzalira
+prettier.config.* @lucamezzalira
+stryker.conf.* @lucamezzalira
+stryker.config.* @lucamezzalira
+.github/CODEOWNERS @lucamezzalira
+**/auth/** @lucamezzalira
+**/payments/** @lucamezzalira
+**/migrations/** @lucamezzalira
+infra/** @lucamezzalira
+terraform/** @lucamezzalira
+.github/workflows/** @lucamezzalira
+harness/** @lucamezzalira

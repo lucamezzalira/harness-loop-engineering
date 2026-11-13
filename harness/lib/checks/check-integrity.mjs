@@ -31,6 +31,7 @@ export const DEFAULT_CHECK_PATHS = Object.freeze([
   'prettier.config.*',
   'stryker.conf.*',
   'stryker.config.*',
+  '.github/CODEOWNERS',
 ]);
 
 export function checkPathsFromConfig(config) {
@@ -60,7 +61,7 @@ export function sessionAllowsCheckEdit(session, now = Date.now(), logText = '') 
 }
 
 /**
- * @returns {{ exitCode: number, findings: Array<{ file: string, message: string }> }}
+ * @returns {{ exitCode: number, findings: Array<{ file: string, message: string }>, localApproval: boolean }}
  */
 export function evaluateCheckIntegrity({
   nameStatus = [],
@@ -72,6 +73,7 @@ export function evaluateCheckIntegrity({
   logText = '',
 } = {}) {
   const findings = [];
+  let localApproval = false;
   const record = session?.explicitCheckEdit;
   if (
     record &&
@@ -134,10 +136,12 @@ export function evaluateCheckIntegrity({
         file,
         message: 'protected check path changed without an explicit instruction record',
       });
+    } else {
+      localApproval = true;
     }
   }
 
-  return { exitCode: findings.length ? 1 : 0, findings };
+  return { exitCode: findings.length ? 1 : 0, findings, localApproval };
 }
 
 export function addedLines(diff) {
@@ -210,6 +214,9 @@ if (isMain) {
     }
   } else {
     console.log('check-integrity ok');
+    if (result.localApproval) {
+      console.log('local approval only; CI protected-change decides on the pull request');
+    }
   }
   process.exit(result.exitCode);
 }
