@@ -17,4 +17,6 @@ A model buys reliability once. A check buys it every time.
 
 Roles never choose severity. They return a `category` from the closed list in `harness.yaml`; configuration maps category → P0–P3.
 
+The acceptance checker also fails a field that is read but never written, an end-to-end criterion whose only test calls a helper on its own, and a new protection with no shell-route test.
+
 Frontmatter on each role file: `name`, `description`, `tier`, `tools`. Never a model.

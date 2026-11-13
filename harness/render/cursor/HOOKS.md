@@ -30,6 +30,8 @@ If changing this, know that agents regain the ability to ship without a green re
 
 `beforeMCPExecution` is optional: copy from `harness/render/cursor/optional/before-mcp.sh` if you want MCP gated the same way as shell.
 
+`beforeShellExecution` is where `pre_tool` refuses a shell write under `harness/state/` and any command that contains `--allow-check-edit`. Cursor's adapter does not see Write or Edit tool calls. Those go through the same `pre_tool` function when a host sends them (Claude Code `PreToolUse` does). A person at the developer's terminal can still run the flag. Cursor does not document an agent marker for hooks. The hook sets `HARNESS_IN_HOOK=1`, which is enough to refuse the flag.
+
 ## Fixture test
 
 ```bash

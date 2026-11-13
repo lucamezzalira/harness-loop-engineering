@@ -64,6 +64,9 @@ export async function invokeFake(opts) {
   } else if (role === 'integrity-checker') {
     data = integrityVerdict(opts.systemPrompt, opts.userPrompt);
     text = JSON.stringify(data);
+  } else if (role === 'acceptance-checker') {
+    data = acceptanceVerdict(opts.systemPrompt, opts.userPrompt);
+    text = JSON.stringify(data);
   } else if (/Harness retro/i.test(`${opts.systemPrompt || ''}\n${opts.userPrompt || ''}`)) {
     text = [
       '1. Add a format guidance line. Evidence: format failed twice.',
@@ -115,6 +118,39 @@ function integrityVerdict(systemPrompt, userPrompt) {
         message: 'test file removed',
       },
     ],
+  };
+}
+
+/**
+ * The acceptance-checker prompt names three duties. A fixture that matches
+ * one of them is a FAIL only when the prompt still contains that duty.
+ * @param {string} systemPrompt
+ * @param {string} userPrompt
+ */
+function acceptanceVerdict(systemPrompt, userPrompt) {
+  const prompt = String(systemPrompt || '').toLowerCase();
+  const armed =
+    prompt.includes('every field the diff reads has a writer') &&
+    prompt.includes('helper on its own') &&
+    prompt.includes('shell route');
+  const text = userPrompt || '';
+  if (!armed) return { verdict: 'PASS', criteria: [] };
+  if (text.includes('read but never written')) {
+    return failCriterion('field read but never written');
+  }
+  if (text.includes('only through a helper')) {
+    return failCriterion('end-to-end criterion tested only through a helper');
+  }
+  if (text.includes('no shell-route test')) {
+    return failCriterion('protection with no shell-route test');
+  }
+  return { verdict: 'PASS', criteria: [] };
+}
+
+function failCriterion(evidence) {
+  return {
+    verdict: 'FAIL',
+    criteria: [{ id: 'fixture', status: 'FAIL', evidence }],
   };
 }
 

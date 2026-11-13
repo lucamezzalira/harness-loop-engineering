@@ -1,0 +1,94 @@
+{
+  "entries": [
+    {
+      "id": "A-49",
+      "description": "Through pre_tool, a Write to harness/state/session.json is refused, with a reason naming harness/state.",
+      "passes": true,
+      "test": "harness/lib/enforce/state-protect.test.mjs"
+    },
+    {
+      "id": "A-50",
+      "description": "Shell redirects, tee, cp, node -e, and --allow-check-edit are refused when they target harness/state or run the flag.",
+      "passes": true,
+      "test": "harness/lib/enforce/state-protect.test.mjs"
+    },
+    {
+      "id": "A-51",
+      "description": "A session record whose hash no longer matches check-edits.log is not accepted. check-integrity reports check-weakened.",
+      "passes": true,
+      "test": "harness/lib/enforce/state-protect.test.mjs"
+    },
+    {
+      "id": "A-52",
+      "description": "--allow-check-edit refuses when an agent environment marker is set. The test sets each marker in turn.",
+      "passes": true,
+      "test": "harness/lib/enforce/state-protect.test.mjs"
+    },
+    {
+      "id": "A-53",
+      "description": "The harness's own writes to harness/state (session, report, retro) still work.",
+      "passes": true,
+      "test": "harness/lib/enforce/state-protect.test.mjs"
+    },
+    {
+      "id": "A-54",
+      "description": "With tool claude and profile default in the config, and no session, --allow-check-edit writes tool claude and profile default.",
+      "passes": true,
+      "test": "harness/lib/enforce/state-protect.test.mjs"
+    },
+    {
+      "id": "A-55",
+      "description": "--backlog triage and --allow-check-edit use newAdhocSession and produce the same fallback session fields.",
+      "passes": true,
+      "test": "harness/lib/enforce/state-protect.test.mjs"
+    },
+    {
+      "id": "A-56",
+      "description": "The report-against-prd skill names the four sections and the verdict line.",
+      "passes": true,
+      "test": "harness/lib/agents/acceptance-checker.test.mjs"
+    },
+    {
+      "id": "A-57",
+      "description": "The acceptance-checker prompt contains the three duties. Fake-provider fixtures expect FAIL for a field read but never written, a helper-only end-to-end test, and a protection with no shell-route test.",
+      "passes": true,
+      "test": "harness/lib/agents/acceptance-checker.test.mjs"
+    },
+    {
+      "id": "A-58",
+      "description": "report-present fails when every criterion passes and REPORT.md is missing or ends in FAIL, and passes when it ends in PASS.",
+      "passes": true,
+      "test": "harness/lib/checks/report-present.test.mjs"
+    },
+    {
+      "id": "A-59",
+      "description": "The three REPORT.md files end in acceptance-checker: PASS, and report-present is green on this tree.",
+      "passes": true,
+      "test": "harness/lib/checks/report-present.test.mjs"
+    },
+    {
+      "id": "A-60",
+      "description": "doc-drift fails on a fixture for each of the six drift cases and passes on this tree.",
+      "passes": true,
+      "test": "harness/lib/checks/doc-drift.test.mjs"
+    },
+    {
+      "id": "A-61",
+      "description": "A search of the docs for the retired host name returns only accepted ADRs 0001, 0004, and 0006.",
+      "passes": true,
+      "test": "harness/lib/checks/doc-drift.test.mjs"
+    },
+    {
+      "id": "A-62",
+      "description": "AGENTS.md has the state boundary line and stays within limits.agentsMdLines. context-budget is green.",
+      "passes": true,
+      "test": "harness/lib/checks/doc-drift.test.mjs"
+    },
+    {
+      "id": "A-63",
+      "description": "The README What changed section covers PRs 2 to 4 and this PRD, with links to the three specs and their reports.",
+      "passes": true,
+      "test": "harness/lib/checks/doc-drift.test.mjs"
+    }
+  ]
+}

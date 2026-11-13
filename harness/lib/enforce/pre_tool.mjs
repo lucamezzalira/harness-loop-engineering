@@ -7,6 +7,8 @@ import {
   DEFAULT_CHECK_PATHS,
 } from '../checks/check-integrity.mjs';
 import { readSession } from '../accounting.mjs';
+import { readCheckEditLog } from './check-edit-record.mjs';
+import { pathUnderState, shellStateRefusal, stateGuardFromConfig } from './state-guard.mjs';
 
 const WRITE_TOOLS = new Set([
   'write',
@@ -38,8 +40,10 @@ export function preTool(root, payload) {
   const reasons = [];
   const isShell = isShellTool(toolKey, command);
   const isWrite = WRITE_TOOLS.has(toolKey) || toolKey.includes('write') || toolKey.includes('edit');
+  const guard = loadStateGuard(root);
 
   if (isShell) {
+    reasons.push(...shellStateRefusal(command, guard));
     if (commandSkipsHooks(command)) {
       reasons.push('refused: command skips hooks');
     }
@@ -80,9 +84,19 @@ export function preTool(root, payload) {
 
     if (rel.startsWith('..') || path.isAbsolute(rel)) {
       reasons.push(`refused: write outside tree (${filePath})`);
+    } else if (pathUnderState(rel, guard.stateDir)) {
+      reasons.push(
+        `refused: ${rel} is under ${guard.stateDir}. The agent cannot write harness state.`,
+      );
     } else if (
       pathIsProtected(rel, loadCheckPaths(root)) &&
-      !pathCoveredByRecord(rel, readSession(root), loadCheckPaths(root))
+      !pathCoveredByRecord(
+        rel,
+        readSession(root),
+        loadCheckPaths(root),
+        Date.now(),
+        readCheckEditLog(root),
+      )
     ) {
       reasons.push(
         `refused: ${rel} is a protected check path. Record explicitCheckEdit with ./verify.sh --allow-check-edit.`,
@@ -126,6 +140,14 @@ function loadCheckPaths(root) {
     return checkPathsFromConfig(loadConfig(root));
   } catch {
     return [...DEFAULT_CHECK_PATHS];
+  }
+}
+
+function loadStateGuard(root) {
+  try {
+    return stateGuardFromConfig(loadConfig(root));
+  } catch {
+    return stateGuardFromConfig(null);
   }
 }
 

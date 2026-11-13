@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import { evaluateCheckIntegrity } from './check-integrity.mjs';
+import { checkEditLogLine } from '../enforce/check-edit-record.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const skipLine = 'it' + '(' + "'x', () => { " + '.' + 'skip(' + '); });';
@@ -37,19 +38,18 @@ test('A-09 deleted tests, skips, suppressions, and unprotected sensor edits fail
   });
   assert.equal(sensor.exitCode, 1);
 
+  const record = {
+    paths: ['all'],
+    reason: 'developer instruction',
+    at: new Date().toISOString(),
+    by: 'developer',
+    sessionId: 's',
+  };
   const allowed = evaluateCheckIntegrity({
     nameStatus: ['M\tharness/sensors/checks/unit.sh'],
     diff: '',
-    session: {
-      id: 's',
-      explicitCheckEdit: {
-        paths: ['all'],
-        reason: 'developer instruction',
-        at: new Date().toISOString(),
-        by: 'developer',
-        sessionId: 's',
-      },
-    },
+    session: { id: 's', explicitCheckEdit: record },
+    logText: checkEditLogLine(record),
   });
   assert.equal(allowed.exitCode, 0);
 

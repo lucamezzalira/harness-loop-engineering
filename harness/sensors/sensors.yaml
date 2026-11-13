@@ -132,6 +132,13 @@ sensors:
     enabled: true
     missing: n/a
 
+  - name: doc-drift
+    tier: turn
+    where: [local, ci]
+    blocking: true
+    enabled: true
+    missing: n/a
+
   - name: deadcode
     tier: turn
     where: [local, ci]
@@ -171,6 +178,13 @@ sensors:
     tier: commit
     where: [ci]
     blocking: false
+    enabled: true
+    missing: n/a
+
+  - name: report-present
+    tier: commit
+    where: [local, ci]
+    blocking: true
     enabled: true
     missing: n/a
 

@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { minimatchLike } from '../util/glob.mjs';
 import { readSession } from '../accounting.mjs';
 import { loadConfig } from '../config.mjs';
-import { recordIsLive } from '../enforce/check-edit-record.mjs';
+import { recordIsLive, recordMatchesLog, readCheckEditLog } from '../enforce/check-edit-record.mjs';
 
 const CODE_EXT = /\.(?:mjs|cjs|js|jsx|ts|tsx)$/;
 const TEST_EXT = /\.test\.(?:mjs|cjs|js|jsx|ts|tsx)$/;
@@ -46,15 +46,17 @@ export function pathIsProtected(rel, patterns = DEFAULT_CHECK_PATHS) {
   return patterns.some((pattern) => minimatchLike(file, pattern) || file === pattern);
 }
 
-export function pathCoveredByRecord(rel, session, checkPaths, now = Date.now()) {
+export function pathCoveredByRecord(rel, session, checkPaths, now = Date.now(), logText = '') {
   const record = session?.explicitCheckEdit;
   if (!recordIsLive(record, { now, sessionId: session?.id })) return false;
+  if (!recordMatchesLog(record, logText)) return false;
   const globs = record.paths.includes('all') ? checkPaths : record.paths;
   return globs.some((pattern) => pathIsProtected(rel, [pattern]));
 }
 
-export function sessionAllowsCheckEdit(session, now = Date.now()) {
-  return recordIsLive(session?.explicitCheckEdit, { now, sessionId: session?.id });
+export function sessionAllowsCheckEdit(session, now = Date.now(), logText = '') {
+  const record = session?.explicitCheckEdit;
+  return recordIsLive(record, { now, sessionId: session?.id }) && recordMatchesLog(record, logText);
 }
 
 /**
@@ -67,8 +69,22 @@ export function evaluateCheckIntegrity({
   session = null,
   checkPaths = DEFAULT_CHECK_PATHS,
   now = Date.now(),
+  logText = '',
 } = {}) {
   const findings = [];
+  const record = session?.explicitCheckEdit;
+  if (
+    record &&
+    recordIsLive(record, { now, sessionId: session?.id }) &&
+    !recordMatchesLog(record, logText)
+  ) {
+    findings.push({
+      file: 'harness/state/session.json',
+      category: 'check-weakened',
+      message:
+        'check-weakened: explicitCheckEdit hash does not match the last check-edits.log line',
+    });
+  }
   const changed = new Set();
 
   for (const raw of nameStatus) {
@@ -113,7 +129,7 @@ export function evaluateCheckIntegrity({
 
   for (const file of changed) {
     if (!pathIsProtected(file, checkPaths)) continue;
-    if (!pathCoveredByRecord(file, session, checkPaths, now)) {
+    if (!pathCoveredByRecord(file, session, checkPaths, now, logText)) {
       findings.push({
         file,
         message: 'protected check path changed without an explicit instruction record',
@@ -166,7 +182,7 @@ export function collectIntegrityInputs(root) {
   } catch {
     /* defaults */
   }
-  return { nameStatus, diff, untracked, session, checkPaths };
+  return { nameStatus, diff, untracked, session, checkPaths, logText: readCheckEditLog(root) };
 }
 
 function gitLines(root, args) {

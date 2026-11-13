@@ -26,7 +26,7 @@ import {
   filterDiffToFiles,
   matchHumanRequired,
 } from '../review/human-required.mjs';
-import { clearCheckEdit, liveCheckEdits } from '../enforce/check-edit-record.mjs';
+import { clearCheckEdit, liveCheckEdits, readCheckEditLog } from '../enforce/check-edit-record.mjs';
 import { findingTotalsFromSession } from '../accounting-review.mjs';
 import { adoptPanelSession } from '../panel/outcomes.mjs';
 import { composeWaveRetro } from './retro.mjs';
@@ -91,12 +91,12 @@ async function writeFinishedWave(root, config, session, wave) {
   await composeWaveRetro(root, config, {
     sessionId: session.id || 'adhoc',
     wave,
-    stats: waveStats(session),
+    stats: waveStats(root, session),
     proposedRules,
   });
 }
 
-function waveStats(session) {
+function waveStats(root, session) {
   const status = session.unitStatus || {};
   return {
     turnsByUnit: session.unitTurns || {},
@@ -110,7 +110,7 @@ function waveStats(session) {
     timeByUnit: session.unitTimeSec || {},
     dismissedByRole: session.dismissedByRole || {},
     findingTotals: findingTotalsFromSession(session),
-    checkEdits: liveCheckEdits(session),
+    checkEdits: liveCheckEdits(session, Date.now(), readCheckEditLog(root)),
   };
 }
 
