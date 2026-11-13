@@ -26,11 +26,18 @@ export function shipCommandHit(command, rules = DEFAULT_SHIP_COMMANDS) {
     .replace(/\s+/g, ' ')
     .trim();
   const list = Array.isArray(rules) ? rules.map((rule) => String(rule)) : [];
+  return hitText(text, list, new Set());
+}
+
+function hitText(text, list, seen) {
+  if (!text || seen.has(text)) return '';
+  seen.add(text);
   return (
     reviewHit(text, list) ||
     graphqlHit(text, list) ||
     httpHit(text, list) ||
     tokenHit(text, list) ||
+    unwrapHit(text, list, seen) ||
     ''
   );
 }
@@ -39,10 +46,10 @@ function reviewHit(text, rules) {
   const tokens = words(text);
   const names = tokens.map(commandName);
   if (!names.includes('gh') || !tokens.includes('pr') || !tokens.includes('review')) return '';
-  if (rules.includes('gh pr review --approve') && tokens.includes('--approve')) {
+  if (rules.includes('gh pr review --approve') && flagOn(tokens, '--approve')) {
     return 'gh pr review --approve';
   }
-  if (rules.includes('gh pr review --request-changes') && tokens.includes('--request-changes')) {
+  if (rules.includes('gh pr review --request-changes') && flagOn(tokens, '--request-changes')) {
     return 'gh pr review --request-changes';
   }
   if (rules.includes('gh pr review -a') && shortFlag(tokens, 'a')) return 'gh pr review -a';
@@ -162,6 +169,51 @@ function httpieNonGet(tokens) {
 function scriptNonGet(text) {
   if (!text.includes('api.github.com')) return false;
   return METHODS.some((method) => text.includes(method));
+}
+
+function unwrapHit(text, list, seen) {
+  const tokens = words(text);
+  for (let i = 0; i < tokens.length; i++) {
+    const name = commandName(tokens[i]);
+    const quoteAt =
+      (name === 'sh' || name === 'bash' || name === 'zsh') && tokens[i + 1] === '-c'
+        ? i + 2
+        : name === 'eval'
+          ? i + 1
+          : -1;
+    if (quoteAt < 0) continue;
+    const inner = quotedCommand(tokens, quoteAt);
+    const hit = inner ? hitText(inner, list, seen) : '';
+    if (hit) return hit;
+  }
+  return '';
+}
+
+function quotedCommand(tokens, start) {
+  const first = tokens[start] || '';
+  const quote = first[0];
+  if (quote !== '"' && quote !== "'") return '';
+  if (first.length > 1 && first.endsWith(quote)) return first.slice(1, -1);
+  const parts = [first.slice(1)];
+  for (let j = start + 1; j < tokens.length; j++) {
+    const token = tokens[j];
+    if (token.endsWith(quote)) {
+      parts.push(token.slice(0, -1));
+      return parts.join(' ');
+    }
+    parts.push(token);
+  }
+  return '';
+}
+
+function flagOn(tokens, name) {
+  const prefix = `${name}=`;
+  return tokens.some((token) => {
+    if (token === name) return true;
+    if (!token.startsWith(prefix)) return false;
+    const value = token.slice(prefix.length).toLowerCase();
+    return value === 'true' || value === '1';
+  });
 }
 
 function shortFlag(tokens, letter) {

@@ -85,11 +85,21 @@ test('A-95 short review flags, GraphQL mutations, and GitHub HTTP writes are ref
     'curl -X PUT https://api.github.com/repos/o/r/pulls/6/merge',
     'curl -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/user',
     'wget --method=POST https://api.github.com/repos/o/r/issues/6/labels',
+    'gh pr review 6 --approve=true',
+    'gh pr review 6 -r=true -b x',
+    'sh -c "gh pr review 6 -a"',
+    "zsh -c 'gh pr merge 6'",
+    'eval "gh pr review 6 --approve"',
   ];
   for (const command of commands) {
     const refused = preTool(root, { tool_name: 'Shell', tool_input: { command } });
     assert.equal(refused.allow, false, command);
     assert.match(refused.reasons.join('\n'), /ship gate/, command);
+  }
+  const allowed = ['gh pr review 6 --approve=false -c -b ok', 'sh -c "gh pr view 6"'];
+  for (const command of allowed) {
+    const result = preTool(root, { tool_name: 'Shell', tool_input: { command } });
+    assert.equal(result.allow, true, command + JSON.stringify(result));
   }
 });
 
