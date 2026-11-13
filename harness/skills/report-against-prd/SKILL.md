@@ -11,3 +11,5 @@ Ask nothing. Read the PRD, `acceptance.json`, and the diff. Write `specs/<slug>/
 4. **Known gaps and rerun commands.** What could not be verified, what was assumed, and the exact commands that reproduce the evidence.
 
 Then run the acceptance checker on that file against the PRD, `acceptance.json`, and the diff. The checker appends one line: `acceptance-checker: PASS` or `acceptance-checker: FAIL` with reasons. Share only a report that ends in `acceptance-checker: PASS`. A FAIL goes back to the implementer.
+
+CI `protected-change` decides a protected change on the pull request. This file does not.

@@ -99,7 +99,7 @@ test('A-75 --install leaves an existing CODEOWNERS byte-identical and reports un
   spawnSync('git', ['init'], { cwd: root });
   const before = fs.readFileSync(path.join(root, '.github', 'CODEOWNERS'));
   const ran = spawnSync(process.execPath, [CLI, '--install'], {
-    cwd: ROOT,
+    cwd: root,
     encoding: 'utf8',
     env: { ...process.env, HARNESS_ROOT: root },
     timeout: 60000,

@@ -11,7 +11,7 @@ const CLI = path.join(ROOT, 'harness', 'lib', 'cli.mjs');
 
 function status(root) {
   return spawnSync(process.execPath, [CLI, '--status'], {
-    cwd: ROOT,
+    cwd: root,
     env: { ...process.env, HARNESS_ROOT: root },
     encoding: 'utf8',
   });

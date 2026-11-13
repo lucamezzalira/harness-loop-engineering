@@ -92,6 +92,17 @@ protect:
     - 'stryker.conf.*'
     - 'stryker.config.*'
     - .github/CODEOWNERS
+  # Commands the ship gate refuses unless the developer gave an explicit instruction.
+  # pre_tool matches every token in a row. Editing this list is a protected check path.
+  shipCommands:
+    - gh pr edit --add-label
+    - gh pr edit --remove-label
+    - gh pr review --approve
+    - gh pr merge
+    - gh label
+    - gh api /labels
+    - gh api /reviews
+    - gh api /merge
   # Shell writes under stateDir. Names map to literal matchers in
   # harness/lib/enforce/state-guard.mjs. This file is itself a check path.
   # pre_tool refuses these, plus any command containing --allow-check-edit.

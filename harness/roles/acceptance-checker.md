@@ -18,3 +18,5 @@ Three more duties:
 
 Do not trust the implementer's summary. Read the diff and the report.
 Never edit files. Never set severity.
+
+CI `protected-change` decides a protected change on the pull request. This file does not.

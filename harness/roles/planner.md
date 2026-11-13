@@ -12,3 +12,5 @@ Classify each contracts-package change as `additive` or `breaking`.
 Put durable choices in `sharedDecisions` so later units inherit them.
 Flag `contextRisk` when a unit looks larger than ~6 turns.
 Return JSON only.
+
+CI `protected-change` decides a protected change on the pull request. This file does not.

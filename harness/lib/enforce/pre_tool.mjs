@@ -9,6 +9,7 @@ import {
 import { readSession } from '../accounting.mjs';
 import { readCheckEditLog } from './check-edit-record.mjs';
 import { pathUnderState, shellStateRefusal, stateGuardFromConfig } from './state-guard.mjs';
+import { DEFAULT_SHIP_COMMANDS, shipCommandHit } from './ship-commands.mjs';
 
 const WRITE_TOOLS = new Set([
   'write',
@@ -68,6 +69,10 @@ export function preTool(root, payload) {
       reasons.push(
         'refused: pull request requires an explicit developer instruction in this session',
       );
+    }
+    const shipHit = shipCommandHit(command, shipRules(root));
+    if (shipHit && !payload.explicitShipInstruction) {
+      reasons.push(`refused: ship gate refuses ${shipHit}`);
     }
     if (
       /\b(terraform\s+apply|pulumi\s+up|fly\s+deploy|kubectl\s+apply)\b/.test(command) &&
@@ -133,6 +138,16 @@ function commitUsesShortNoVerify(cmd) {
   if (!match) return false;
   const rest = match[1].replace(/"[^"]*"|'[^']*'/g, ' ');
   return /(^|\s)-n(\s|$)/.test(rest);
+}
+
+function shipRules(root) {
+  try {
+    const listed = loadConfig(root)?.protect?.shipCommands;
+    if (Array.isArray(listed) && listed.length) return listed;
+  } catch {
+    /* defaults */
+  }
+  return DEFAULT_SHIP_COMMANDS;
 }
 
 function loadCheckPaths(root) {

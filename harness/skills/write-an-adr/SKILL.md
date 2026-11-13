@@ -16,3 +16,5 @@ After those answers:
 3. Fill body sections, especially **How the agent applies this**.
 4. Run `node scripts/build-adr-index.mjs` and commit the regenerated `docs/adr/README.md`.
 5. Never edit an `accepted` ADR in place. Supersede with a new ADR instead.
+
+CI `protected-change` decides a protected change on the pull request. This file does not.

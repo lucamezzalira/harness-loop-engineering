@@ -15,3 +15,5 @@ After those answers:
 2. Deduplicate with that key.
 3. Add the retry test.
 4. Run `./verify.sh --turn`.
+
+CI `protected-change` decides a protected change on the pull request. This file does not.

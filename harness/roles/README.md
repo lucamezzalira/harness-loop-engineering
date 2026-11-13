@@ -19,4 +19,6 @@ Roles never choose severity. They return a `category` from the closed list in `h
 
 The acceptance checker also fails a field that is read but never written, an end-to-end criterion whose only test calls a helper on its own, and a new protection with no shell-route test.
 
+No role approves a protected change. CI `protected-change` decides that on the pull request.
+
 Frontmatter on each role file: `name`, `description`, `tier`, `tools`. Never a model.

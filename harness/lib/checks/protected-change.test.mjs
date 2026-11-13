@@ -54,6 +54,7 @@ function pullEvent(base, head, extra = {}) {
       base: { sha: base },
       head: { sha: head },
       labels: extra.labels || [],
+      updated_at: extra.updated_at,
     },
   };
 }
@@ -205,15 +206,34 @@ test('A-64 a protected change with no review fails and names the file, rule, and
     const report = JSON.parse(reported.stdout);
     assert.equal(report.files[0].file, 'harness.yaml');
     assert.equal(report.status, 'fail');
+    const statusRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-status-ci-'));
+    fs.writeFileSync(path.join(statusRoot, 'harness.local.yaml'), 'tool: cursor\n');
+    fs.mkdirSync(path.join(statusRoot, 'harness', 'sensors'), { recursive: true });
+    fs.writeFileSync(
+      path.join(statusRoot, 'harness', 'sensors', 'sensors.yaml'),
+      [
+        'sensors:',
+        '  - name: protected-change',
+        '    tier: commit',
+        '    where: [ci]',
+        '    blocking: true',
+        '    enabled: true',
+        '    missing: n/a',
+        '',
+      ].join('\n'),
+    );
     const status = spawnSync(
       process.execPath,
       [path.join(ROOT, 'harness', 'lib', 'cli.mjs'), '--status'],
       {
-        cwd: ROOT,
+        cwd: statusRoot,
         encoding: 'utf8',
+        env: { ...process.env, HARNESS_ROOT: statusRoot },
       },
     );
+    assert.equal(status.status, 0, status.stderr || status.stdout);
     assert.match(status.stdout, /CI-only:.*protected-change/);
+    fs.rmSync(statusRoot, { recursive: true, force: true });
   } finally {
     await mock.close();
     fs.rmSync(root, { recursive: true, force: true });
@@ -325,10 +345,7 @@ test('A-67 the solo label passes, a synchronize removes it, and a backdated comm
   });
   fs.mkdirSync(path.join(root, '.github'), { recursive: true });
   fs.writeFileSync(path.join(root, '.github', 'CODEOWNERS'), 'harness.yaml @solo\n');
-  const eventPath = writeEvent(
-    root,
-    pullEvent(base, head, { author: 'solo', action: 'synchronize' }),
-  );
+  const eventPath = writeEvent(root, pullEvent(base, head, { author: 'solo', action: 'opened' }));
   const state = {
     reviews: [],
     timeline: [
@@ -353,6 +370,16 @@ test('A-67 the solo label passes, a synchronize removes it, and a backdated comm
     const passed = await runSensor(root, env);
     assert.equal(passed.status, 0, passed.stdout + passed.stderr);
     assert.match(passed.stdout, /approver solo route label/);
+    fs.writeFileSync(
+      eventPath,
+      JSON.stringify(
+        pullEvent(base, head, {
+          author: 'solo',
+          action: 'synchronize',
+          updated_at: '2024-06-01T00:00:00Z',
+        }),
+      ),
+    );
     const cleared = await spawnOut(process.execPath, [CLEAR], sensorEnv(root, env));
     assert.equal(cleared.status, 0, cleared.stdout + cleared.stderr);
     assert.ok(
@@ -365,7 +392,7 @@ test('A-67 the solo label passes, a synchronize removes it, and a backdated comm
       event: 'labeled',
       actor: { login: 'solo' },
       label: { name: LABEL },
-      created_at: '2024-01-01T00:00:00Z',
+      created_at: '2024-07-01T00:00:00Z',
     });
     const again = await runSensor(root, env);
     assert.equal(again.status, 0, again.stdout + again.stderr);
@@ -397,6 +424,57 @@ test('A-67 the label job loads from a tree that has no node_modules', () => {
   assert.match(ran.stdout, /clear-protected-label skipped/);
   assert.doesNotMatch(`${ran.stderr}`, /yaml|Cannot find package/);
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('A-87 a label older than the synchronize event does not count', async () => {
+  const root = initRepo();
+  const base = git(root, ['rev-parse', 'HEAD']);
+  fs.writeFileSync(path.join(root, 'harness.yaml'), 'project:\n  name: demo\n');
+  const head = commitAll(root, 'edit harness');
+  fs.mkdirSync(path.join(root, '.github'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.github', 'CODEOWNERS'), 'harness.yaml @solo\n');
+  const event = pullEvent(base, head, {
+    author: 'solo',
+    action: 'synchronize',
+    updated_at: '2024-06-01T00:00:00Z',
+  });
+  const eventPath = writeEvent(root, event);
+  const state = {
+    reviews: [],
+    timeline: [
+      {
+        event: 'labeled',
+        actor: { login: 'solo' },
+        label: { name: LABEL },
+        created_at: '2024-01-01T00:00:00Z',
+      },
+    ],
+    labels: [LABEL],
+    pulls: [],
+    failReviews: false,
+  };
+  const mock = await startMock(state);
+  const env = {
+    GITHUB_EVENT_NAME: 'pull_request',
+    GITHUB_EVENT_PATH: eventPath,
+    GITHUB_API_URL: mock.url,
+  };
+  try {
+    const stale = await runSensor(root, env);
+    assert.equal(stale.status, 1, stale.stdout + stale.stderr);
+    state.timeline.push({
+      event: 'labeled',
+      actor: { login: 'solo' },
+      label: { name: LABEL },
+      created_at: '2024-07-01T00:00:00Z',
+    });
+    const fresh = await runSensor(root, env);
+    assert.equal(fresh.status, 0, fresh.stdout + fresh.stderr);
+    assert.match(fresh.stdout, /approver solo route label/);
+  } finally {
+    await mock.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('A-68 a label added by someone outside CODEOWNERS does not count', async () => {

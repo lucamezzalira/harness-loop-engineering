@@ -15,3 +15,5 @@ After those answers:
 2. Fill problem, users, behaviour, non-goals, and the acceptance ids from the answers.
 3. Do not invent implementation detail that belongs in an ADR.
 4. Run `./verify.sh --plan` when ready to decompose.
+
+CI `protected-change` decides a protected change on the pull request. This file does not.

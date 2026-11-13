@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -61,7 +62,7 @@ test('session-start returns treeHash', () => {
 test('BOM-prefixed JSON still parses in --hook', () => {
   const bom = '\uFEFF' + JSON.stringify({ moment: 'beforeShellExecution', command: 'echo hi' });
   const r = spawnSync('bash', [path.join(ROOT, 'verify.sh'), '--hook'], {
-    cwd: ROOT,
+    cwd: os.tmpdir(),
     input: bom,
     encoding: 'utf8',
     env: {

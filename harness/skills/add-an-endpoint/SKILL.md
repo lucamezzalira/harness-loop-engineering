@@ -14,3 +14,5 @@ After those answers:
 1. Validate input at the edge. Read config from `config/env.js`.
 2. Add the unit test named in acceptance.json.
 3. Run `./verify.sh --turn` before finishing.
+
+CI `protected-change` decides a protected change on the pull request. This file does not.

@@ -11,3 +11,5 @@ Never set severity. Prefer categories: acceptance-unmet, missing-idempotency, er
 When the diff touches paths covered by `docs/adr/` `touches` globs (services, packages, infra, harness),
 check that the plan or PR description names at least one ADR from `docs/adr/README.md`, or states that
 none apply. Missing consultation is category `naming` (P3) or `style` — advisory, not a P0/P1 block.
+
+CI `protected-change` decides a protected change on the pull request. This file does not.

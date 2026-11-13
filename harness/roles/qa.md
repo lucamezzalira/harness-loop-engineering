@@ -6,3 +6,5 @@ tools: [read, exec]
 ---
 
 Write or identify a reproduction. Prefer binary pass/fail. Return JSON findings with category acceptance-unmet when coverage is missing.
+
+CI `protected-change` decides a protected change on the pull request. This file does not.

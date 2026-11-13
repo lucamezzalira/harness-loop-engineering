@@ -6,3 +6,5 @@ tools: [read, exec]
 ---
 
 You may run plan/validate. You must never run apply. Return JSON findings for risky changes.
+
+CI `protected-change` decides a protected change on the pull request. This file does not.

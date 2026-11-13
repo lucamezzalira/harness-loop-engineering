@@ -50,7 +50,7 @@ test('A-48 each tier summary names the skipped sensor', () => {
   );
   for (const flag of [['--edit'], ['--turn'], []]) {
     const result = spawnSync(process.execPath, [CLI, ...flag], {
-      cwd: ROOT,
+      cwd: tmp,
       env: { ...process.env, HARNESS_ROOT: tmp },
       encoding: 'utf8',
     });

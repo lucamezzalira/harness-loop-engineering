@@ -1,0 +1,70 @@
+{
+  "entries": [
+    {
+      "id": "A-84",
+      "description": "No test spawns cli.mjs or verify.sh with cwd set to the real repo root.",
+      "passes": true,
+      "test": "harness/lib/checks/ci-gate-fixes.test.mjs"
+    },
+    {
+      "id": "A-85",
+      "description": "The CI workflow runs npm test with no local config before any step writes that file.",
+      "passes": true,
+      "test": "harness/lib/checks/ci-gate-fixes.test.mjs"
+    },
+    {
+      "id": "A-86",
+      "description": "verify needs clear-protected-label and still runs when that job is skipped.",
+      "passes": true,
+      "test": "harness/lib/checks/ci-gate-fixes.test.mjs"
+    },
+    {
+      "id": "A-87",
+      "description": "On synchronize, a label older than the event timestamp fails and a later label passes.",
+      "passes": true,
+      "test": "harness/lib/checks/protected-change.test.mjs"
+    },
+    {
+      "id": "A-88",
+      "description": "pre_tool refuses label, review, and merge commands without a ship instruction.",
+      "passes": true,
+      "test": "harness/lib/enforce/pre_tool.test.mjs"
+    },
+    {
+      "id": "A-89",
+      "description": "gh pr view and gh pr checks stay allowed.",
+      "passes": true,
+      "test": "harness/lib/enforce/pre_tool.test.mjs"
+    },
+    {
+      "id": "A-90",
+      "description": "CODEOWNERS lists harness/** before every other harness rule.",
+      "passes": true,
+      "test": "harness/lib/checks/ci-gate-fixes.test.mjs"
+    },
+    {
+      "id": "A-91",
+      "description": "codeowners-coverage fails when a broad glob comes after a specific glob it covers.",
+      "passes": true,
+      "test": "harness/lib/checks/ci-gate-fixes.test.mjs"
+    },
+    {
+      "id": "A-92",
+      "description": "report-present fails a partial acceptance file and names the missing ids.",
+      "passes": true,
+      "test": "harness/lib/checks/ci-gate-fixes.test.mjs"
+    },
+    {
+      "id": "A-93",
+      "description": "Deferred lines take ids out of scope, and removing one fails the check.",
+      "passes": true,
+      "test": "harness/lib/checks/ci-gate-fixes.test.mjs"
+    },
+    {
+      "id": "A-94",
+      "description": "report-present is green on this tree, including the gate spec through A-83.",
+      "passes": true,
+      "test": "harness/lib/checks/ci-gate-fixes.test.mjs"
+    }
+  ]
+}

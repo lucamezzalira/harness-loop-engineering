@@ -100,7 +100,7 @@ function reviewApprover(reviews, owners, author, head) {
   return '';
 }
 
-function labelApprover(labels, timeline, owners) {
+function labelApprover(labels, timeline, owners, cutoff) {
   const names = (labels || []).map((label) => (typeof label === 'string' ? label : label?.name));
   if (!names.includes(PROTECTED_LABEL)) return '';
   const relevant = (timeline || []).filter((event) => {
@@ -109,9 +109,22 @@ function labelApprover(labels, timeline, owners) {
   });
   const last = relevant[relevant.length - 1];
   if (!last || last.event !== 'labeled') return '';
+  if (cutoff && !labelIsCurrent(last.created_at, cutoff)) return '';
   const actor = loginOf(last.actor?.login);
   if (!actor || !owners.has(actor)) return '';
   return actor;
+}
+
+function labelIsCurrent(createdAt, cutoff) {
+  const at = Date.parse(createdAt || '');
+  const cut = Date.parse(cutoff || '');
+  if (Number.isNaN(at) || Number.isNaN(cut)) return false;
+  return at >= cut;
+}
+
+function synchronizeCutoff(event, pr) {
+  if (event?.action !== 'synchronize') return '';
+  return pr?.updated_at || event?.pull_request?.updated_at || '9999-12-31T00:00:00Z';
 }
 
 function decideFile(file, owners, author, reviews, labelActor) {
@@ -186,7 +199,12 @@ async function evaluatePull(root, env, event, pr) {
       github(env, `/repos/${repo}/issues/${number}/labels`),
       github(env, `/repos/${repo}/issues/${number}/timeline`),
     ]);
-    labelActor = labelApprover(labels, timeline, ownerLogins(codeowners));
+    labelActor = labelApprover(
+      labels,
+      timeline,
+      ownerLogins(codeowners),
+      synchronizeCutoff(event, pr),
+    );
   }
   const decided = withOwners.map((file) =>
     decideFile(file, file.owners, author, reviews, labelActor),

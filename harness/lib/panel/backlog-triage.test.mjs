@@ -63,7 +63,7 @@ test('A-42 --backlog without a TTY matches the snapshot', () => {
   });
   assert.equal(renderBacklog(tmp), SNAPSHOT);
   const spawned = spawnSync(process.execPath, [CLI, '--backlog'], {
-    cwd: ROOT,
+    cwd: tmp,
     env: { ...process.env, HARNESS_ROOT: tmp },
     encoding: 'utf8',
   });

@@ -91,6 +91,16 @@ export const DEFAULTS = Object.freeze({
       'stryker.config.*',
       '.github/CODEOWNERS',
     ],
+    shipCommands: [
+      'gh pr edit --add-label',
+      'gh pr edit --remove-label',
+      'gh pr review --approve',
+      'gh pr merge',
+      'gh label',
+      'gh api /labels',
+      'gh api /reviews',
+      'gh api /merge',
+    ],
     stateDir: 'harness/state',
     stateWrites: [
       'redirect',

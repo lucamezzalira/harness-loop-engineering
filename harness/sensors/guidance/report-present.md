@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-A spec can mark every acceptance entry passing while the claim was never checked against the PRD. This sensor reads `specs/<slug>/acceptance.json`. When every entry has `passes: true`, it requires `REPORT.md` in that folder, and the file must end with the line `acceptance-checker: PASS`.
+A spec can mark every acceptance entry passing while the claim was never checked against the PRD. This sensor reads every `A-NN` id in `specs/<slug>/PRD.md` and requires that id in `acceptance.json` with `passes: true`, and in the `## Criteria` section of `REPORT.md`. A line `Deferred: A-NN (reason)` takes that id out of scope. An open spec whose ids are all still `passes: false`, and which has no report, is not a completed claim. When every entry has `passes: true`, the report must end with the line `acceptance-checker: PASS`.
 
 ## What to do
 
