@@ -45,7 +45,7 @@ test('A-35 --allow-check-edit without a TTY exits 2 and writes nothing', async (
   const session = path.join(tmp, 'harness', 'state', 'session.json');
   const log = path.join(tmp, 'harness', 'state', 'check-edits.log');
   const spawned = spawnSync(process.execPath, [CLI, '--allow-check-edit'], {
-    cwd: ROOT,
+    cwd: tmp,
     env: { ...process.env, HARNESS_ROOT: tmp, HARNESS_IN_HOOK: '0' },
     encoding: 'utf8',
   });

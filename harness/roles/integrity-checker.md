@@ -20,3 +20,5 @@ Return `{verdict, findings: [{category, file, line, message}]}`.
 `verdict` is `PASS` or `FAIL`.
 Categories come from the closed list in `harness.yaml`. A weakened check is category `check-weakened`.
 Never edit files. Never set severity.
+
+CI `protected-change` decides a protected change on the pull request. This file does not.

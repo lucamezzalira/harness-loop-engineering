@@ -20,3 +20,5 @@ After those answers, and only then:
 5. Add an `acceptance.json` entry `ESC-NN` whose test field is that file.
 
 Do not skip the failing run.
+
+CI `protected-change` decides a protected change on the pull request. This file does not.

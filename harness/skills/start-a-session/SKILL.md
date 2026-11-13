@@ -9,3 +9,5 @@ description: Use at the beginning of any coding session before picking up work.
 4. Confirm services still start (or note they do not).
 5. Run `./verify.sh --status` and note skipped checks.
 6. Only then choose the next unit or task.
+
+CI `protected-change` decides a protected change on the pull request. This file does not.

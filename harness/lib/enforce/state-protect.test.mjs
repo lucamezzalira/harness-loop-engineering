@@ -26,7 +26,7 @@ function tmpDir() {
 
 function hook(payload) {
   return spawnSync(process.execPath, [CLI, '--hook'], {
-    cwd: ROOT,
+    cwd: os.tmpdir(),
     input: JSON.stringify(payload),
     encoding: 'utf8',
     env: { ...process.env, HARNESS_ROOT: ROOT, HARNESS_IN_HOOK: '1' },
@@ -186,7 +186,7 @@ test('A-52 --allow-check-edit refuses each agent environment marker', () => {
   for (const marker of AGENT_ENV_MARKERS) {
     const tmp = tmpDir();
     const spawned = spawnSync(process.execPath, [CLI, '--allow-check-edit'], {
-      cwd: ROOT,
+      cwd: tmp,
       env: developerEnv({ HARNESS_ROOT: tmp, [marker]: '1' }),
       encoding: 'utf8',
     });
@@ -306,7 +306,7 @@ test('A-53 --loop still writes session, report, and retro', () => {
   );
   commitAll(tmp);
   const spawned = spawnSync(process.execPath, [CLI, '--loop'], {
-    cwd: ROOT,
+    cwd: tmp,
     env: developerEnv({
       HARNESS_ROOT: tmp,
       HARNESS_FAKE_PROVIDER: '1',

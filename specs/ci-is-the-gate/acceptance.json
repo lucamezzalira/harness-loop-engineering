@@ -83,6 +83,42 @@
       "description": "harness/ and docs/ do not call the local record the decision. The test lists the forbidden phrases.",
       "passes": true,
       "test": "harness/lib/checks/check-integrity.test.mjs"
+    },
+    {
+      "id": "A-78",
+      "description": "ADR 0007 exists, is in the index, and passes adr-frontmatter.",
+      "passes": true,
+      "test": "harness/lib/checks/ci-gate-fixes.test.mjs"
+    },
+    {
+      "id": "A-79",
+      "description": "The README trust-model section names protected-change, the label route, label clearing on push, and the branch-protection caveat.",
+      "passes": true,
+      "test": "harness/lib/checks/ci-gate-fixes.test.mjs"
+    },
+    {
+      "id": "A-80",
+      "description": "Without a ship instruction, pre_tool refuses gh label, review, and merge commands, and still allows gh pr view and gh pr checks.",
+      "passes": true,
+      "test": "harness/lib/enforce/pre_tool.test.mjs"
+    },
+    {
+      "id": "A-81",
+      "description": "docs/guide.md has the fourteen steps in order and the README links it within the first 40 lines.",
+      "passes": true,
+      "test": "harness/lib/checks/ci-gate-fixes.test.mjs"
+    },
+    {
+      "id": "A-82",
+      "description": "doc-drift fails an unknown guide flag, a CLI flag missing from the guide, and a missing README link. It passes on this tree.",
+      "passes": true,
+      "test": "harness/lib/checks/ci-gate-fixes.test.mjs"
+    },
+    {
+      "id": "A-83",
+      "description": "Every guide code block that starts with ./verify.sh runs in a fixture without exiting 2. --loop, --install, and --allow-check-edit only check --help.",
+      "passes": true,
+      "test": "harness/lib/checks/ci-gate-fixes.test.mjs"
     }
   ]
 }

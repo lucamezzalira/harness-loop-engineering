@@ -6,3 +6,5 @@ tools: [read, write, exec]
 ---
 
 Add focused tests named in acceptance.json. Prefer the repo test runner. Do not weaken assertions to go green.
+
+CI `protected-change` decides a protected change on the pull request. This file does not.

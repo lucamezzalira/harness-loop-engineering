@@ -4,7 +4,9 @@ A standalone harness you drop into a Node repository. One executable is the entr
 
 It gives the coding agent a fixed set of guides, a fixed set of sensors, a small number of moments where it can be refused, and a review panel that runs on every piece of work.
 
-Nothing ships (commit, push, pull request, deploy) without an explicit developer instruction in the current session. That is not configurable.
+Nothing ships (commit, push, pull request, label, review, merge, deploy) without an explicit developer instruction in the current session. That is not configurable.
+
+Step by step: [docs/guide.md](docs/guide.md).
 
 ## Quick start
 
@@ -28,6 +30,16 @@ npm install
 npm test
 node scripts/smoke-runtime-drift.js
 ```
+
+## Trust model
+
+CI's `protected-change` check decides, on the pull request, whether a protected change was approved. Local hooks are an early warning. They are only as strong as the hooks that tool actually sends. Cursor's adapter has `beforeShellExecution` and `afterFileEdit`. It has no before-write hook, so a Write of `harness/state/session.json` never reaches `pathUnderState`.
+
+A solo maintainer (the only owner of the file) can add the label `protected-change-approved`. A new push clears that label. The `clear-protected-label` job runs on `synchronize`, and the `verify` job waits for it. A `labeled` event older than the pull request's `updated_at` is treated as absent.
+
+Without branch protection, a red `protected-change` does not block a merge. Optional: in the GitHub repo, open Settings, then Branches, and require the `protected-change` status check before merging.
+
+If the agent can reach the developer's GitHub token, GitHub cannot tell the agent from the developer. Keep tokens out of the agent's environment. The ship gate refuses push, pull-request create, label, review, and merge commands until that explicit instruction is in the session.
 
 ## How it works
 

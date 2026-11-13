@@ -1,4 +1,6 @@
-# Owners for protect.checkPaths and review.humanRequired.paths.
+# GitHub uses the last matching line. The broad harness rule is first so a
+# later, more specific harness path keeps the owner on that later line.
+harness/** @lucamezzalira
 harness/sensors/** @lucamezzalira
 harness/lib/enforce/** @lucamezzalira
 harness/lib/checks/** @lucamezzalira
@@ -22,4 +24,3 @@ stryker.config.* @lucamezzalira
 infra/** @lucamezzalira
 terraform/** @lucamezzalira
 .github/workflows/** @lucamezzalira
-harness/** @lucamezzalira

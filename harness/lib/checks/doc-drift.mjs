@@ -20,6 +20,7 @@ export function evaluateDocDrift(root) {
     ...skillFindings(root),
     ...configKeyFindings(root),
     ...linkFindings(root),
+    ...guideFindings(root),
   ];
   return { exitCode: findings.length ? 1 : 0, findings };
 }
@@ -121,6 +122,48 @@ function linkFindings(root) {
     }
   }
   return findings;
+}
+
+function guideFindings(root) {
+  const guidePath = path.join(root, 'docs', 'guide.md');
+  if (!fs.existsSync(guidePath)) return [];
+  const findings = [];
+  const readme = readIf(path.join(root, 'README.md'));
+  const head = readme.split('\n').slice(0, 40).join('\n');
+  if (!head.includes('docs/guide.md')) {
+    findings.push('README does not link to docs/guide.md within its first 40 lines');
+  }
+  const guide = fs.readFileSync(guidePath, 'utf8');
+  const cliPath = path.join(root, 'harness', 'lib', 'cli.mjs');
+  const flags = fs.existsSync(cliPath) ? flagsIn(fs.readFileSync(cliPath, 'utf8')) : [];
+  for (const command of fenceCommands(guide)) {
+    for (const token of command.split(/\s+/)) {
+      if (!token.startsWith('--')) continue;
+      const flag = token.split('=')[0];
+      if (!flags.includes(flag)) {
+        findings.push(`guide uses ${flag}, which cli.mjs does not accept`);
+      }
+    }
+  }
+  for (const flag of flags) {
+    if (!guide.includes(flag)) {
+      findings.push(`flag ${flag} is accepted by cli.mjs and missing from the guide`);
+    }
+  }
+  return findings;
+}
+
+function fenceCommands(guide) {
+  const out = [];
+  const parts = String(guide || '').split('```');
+  for (let i = 1; i < parts.length; i += 2) {
+    const body = parts[i].replace(/^[^\n]*\n/, '');
+    for (const line of body.split('\n')) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('./verify.sh')) out.push(trimmed);
+    }
+  }
+  return out;
 }
 
 function flagsIn(cli) {

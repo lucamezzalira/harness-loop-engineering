@@ -12,6 +12,12 @@
 
 # terminal can still record a local early warning. CI protected-change decides
 
-# on the pull request. The hash of the record must match
+# on the pull request. protect.shipCommands refuses, without an explicit
+
+# instruction: gh pr edit --add-label, gh pr edit --remove-label,
+
+# gh pr review --approve, gh pr merge, gh label, and any gh api path
+
+# containing /labels, /reviews, or /merge. The hash of the record must match
 
 # harness/state/check-edits.log or check-integrity reports check-weakened.

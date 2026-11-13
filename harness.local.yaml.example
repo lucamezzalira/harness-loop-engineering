@@ -26,8 +26,9 @@ loop:
 # The agent never runs ./verify.sh --allow-check-edit and never writes
 # harness/state/. The developer runs that flag from their own terminal.
 # protect.stateWrites in harness.yaml names the shell writes pre_tool refuses.
-# A person at that terminal can still approve. The record hash must match
-# harness/state/check-edits.log.
+# A person at that terminal can still record a local early warning. The record
+# hash must match harness/state/check-edits.log. CI protected-change decides
+# on the pull request. protect.shipCommands refuses gh label, review, and merge.
 
 # Working on this harness repo: drop harness/** or every loop unit that
 # touches the harness ends needs-human. Arrays replace, they do not append.

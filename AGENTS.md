@@ -16,7 +16,7 @@ JavaScript (ESM) on Node 20+, npm.
 A change is done when `./verify.sh` exits 0. That means the panel of
 review roles has run at the tier the change requires, no P0 or P1
 findings remain open, and the ship gate still requires an explicit
-developer instruction before commit, push, PR, or deploy. A change that
+developer instruction before commit, push, PR, label, review, merge, or deploy. A change that
 only compiles is not done.
 
 ## Project structure

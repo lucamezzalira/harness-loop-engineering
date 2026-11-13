@@ -90,6 +90,21 @@ export function globsToCover(config) {
   return out;
 }
 
+export function broadOverrides(lines) {
+  const hits = [];
+  for (let i = 0; i < (lines || []).length; i++) {
+    for (let j = i + 1; j < lines.length; j++) {
+      const earlier = lines[i].pattern;
+      const later = lines[j].pattern;
+      if (earlier === later) continue;
+      if (patternCoversGlob(later, earlier) && !patternCoversGlob(earlier, later)) {
+        hits.push({ later, earlier });
+      }
+    }
+  }
+  return hits;
+}
+
 export function uncoveredGlobs(config, lines) {
   const missing = [];
   for (const glob of globsToCover(config)) {

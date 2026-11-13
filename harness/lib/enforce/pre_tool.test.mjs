@@ -59,6 +59,29 @@ test('ship gate blocks agent commit', () => {
   assert.equal(r.allow, false);
 });
 
+test('A-88 the ship gate refuses label, review, and merge commands', () => {
+  const commands = [
+    'gh pr edit 6 --add-label protected-change-approved',
+    'gh pr review 6 --approve',
+    'gh pr merge 6',
+    'gh label create x',
+    'gh api repos/o/r/issues/6/labels -f labels[]=x',
+    'gh api -X PUT repos/o/r/pulls/6/merge',
+  ];
+  for (const command of commands) {
+    const refused = preTool(root, { tool_name: 'Shell', tool_input: { command } });
+    assert.equal(refused.allow, false, command);
+    assert.match(refused.reasons.join('\n'), /ship gate/, command);
+  }
+});
+
+test('A-89 read-only pull request commands stay allowed', () => {
+  for (const command of ['gh pr view 6', 'gh pr checks 6']) {
+    const allowed = preTool(root, { tool_name: 'Shell', tool_input: { command } });
+    assert.equal(allowed.allow, true, command + JSON.stringify(allowed));
+  }
+});
+
 test('A-07 refuses a write on a protected check path without explicitCheckEdit', () => {
   const denied = preTool(root, {
     tool_name: 'Write',
