@@ -756,6 +756,7 @@ test('A-101 and A-118 the base-branch workflow parses and does not run the pull 
   assert.equal(doc.on.pull_request, undefined);
   assert.equal(doc.on.pull_request_review, undefined);
   assert.match(raw, /securely-using-pull_request_target/);
+  assert.match(raw, /BASE_SHA:\s*\$\{\{\s*github\.event\.pull_request\.base\.sha\s*\}\}/);
   const guidance = fs.readFileSync(
     path.join(ROOT, 'harness', 'sensors', 'guidance', 'protected-change.md'),
     'utf8',
@@ -772,6 +773,10 @@ test('A-101 and A-118 the base-branch workflow parses and does not run the pull 
     for (const step of jobSteps(job)) {
       const ref = String(step.with?.ref || '');
       assert.doesNotMatch(ref, /head\.sha|head\.ref|\/head|\/merge/);
+      assert.doesNotMatch(ref, /github\.event\.pull_request/);
+      if (String(step.uses || '').startsWith('actions/checkout@')) {
+        assert.match(ref, /env\.BASE_SHA/);
+      }
       const run = String(step.run || '');
       assert.doesNotMatch(run, /\bnpm (?:install|ci)\b/);
       assert.doesNotMatch(run, /\bgit checkout\b/);

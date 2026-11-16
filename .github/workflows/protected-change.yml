@@ -9,10 +9,16 @@
 # and runs the sensor from that checkout. It does not npm install and it does not
 # run a script from the fetched ref.
 # https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target
+#
+# Semgrep's pull-request-target-code-checkout rule matches any
+# github.event.pull_request expression on an actions/checkout ref, including
+# base.sha. BASE_SHA is that base commit. The checkout ref reads BASE_SHA.
 name: Protected change
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, labeled, unlabeled]
+env:
+  BASE_SHA: ${{ github.event.pull_request.base.sha }}
 
 jobs:
   clear-protected-label:
@@ -24,7 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ env.BASE_SHA }}
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: '24'
@@ -48,7 +54,7 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ env.BASE_SHA }}
           fetch-depth: 0
       - name: Fetch the pull request head as data
         run: git fetch --no-tags origin "refs/pull/${{ github.event.pull_request.number }}/head"

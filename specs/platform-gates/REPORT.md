@@ -28,7 +28,7 @@ Reviewed against `specs/platform-gates/acceptance.json` (A-101 through A-119).
 
 ## Wiring proof
 
-`GITHUB_EVENT_NAME` and `GITHUB_EVENT_PATH` are set by GitHub Actions. `readGithubEvent` reads the file. The protected-change workflow's event is `pull_request_target`. The events page lists that event's payload as `pull_request`, so `pull_request.base.sha`, `pull_request.head.sha`, `pull_request.number`, and `pull_request.updated_at` are fields GitHub writes. The workflow checks out `github.event.pull_request.base.sha` and fetches `refs/pull/<n>/head` as data. The sensor diffs the two SHAs inside the base checkout.
+`GITHUB_EVENT_NAME` and `GITHUB_EVENT_PATH` are set by GitHub Actions. `readGithubEvent` reads the file. The protected-change workflow's event is `pull_request_target`. The events page lists that event's payload as `pull_request`, so `pull_request.base.sha`, `pull_request.head.sha`, `pull_request.number`, and `pull_request.updated_at` are fields GitHub writes. The workflow checks out that base SHA through `BASE_SHA` and fetches `refs/pull/<n>/head` as data. The sensor diffs the two SHAs inside the base checkout.
 
 `GITHUB_TOKEN` is `github.token` on the sensor job and on the clear job. `github()` reads it. A missing token still exits 2 (A-72 and A-109).
 

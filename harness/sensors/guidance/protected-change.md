@@ -12,7 +12,7 @@ https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows
 
 https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target
 
-The events page lists `GITHUB_REF` for `pull_request_target` as the default branch, and the security page says a checkout with no `ref` is taken from that default branch. This job sets `ref` to `github.event.pull_request.base.sha` so the sensor and `harness.yaml` are the base commit of the pull request. That SHA is a commit on the base repository. It is not the head. The docs do not say an omitted `ref` follows a non-default base branch, so the job names the base SHA instead of guessing.
+The events page lists `GITHUB_REF` for `pull_request_target` as the default branch, and the security page says a checkout with no `ref` is taken from that default branch. This job sets `ref` to `BASE_SHA`, which is `github.event.pull_request.base.sha`, so the sensor and `harness.yaml` are the base commit of the pull request. The checkout step does not read `github.event.pull_request` itself. Semgrep's pull-request-target rule treats every such expression on a checkout ref as the untrusted head, including `base.sha`. That SHA is a commit on the base repository. It is not the head. The docs do not say an omitted `ref` follows a non-default base branch, so the job names the base SHA instead of guessing.
 
 ## What to do
 
