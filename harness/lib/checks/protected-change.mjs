@@ -2,19 +2,48 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { loadConfig } from '../config.mjs';
-import { addedLines, pathIsProtected } from './check-integrity.mjs';
-import { humanRequiredConfig, patternHits } from '../review/human-required.mjs';
-import { minimatchLike } from '../util/glob.mjs';
+import { addedLines } from './diff-lines.mjs';
+import { DEFAULT_CHECK_PATHS, pathIsProtected } from './check-paths.mjs';
+import {
+  DEFAULT_HUMAN_PATHS,
+  DEFAULT_HUMAN_PATTERNS,
+  patternHits,
+} from '../review/human-required.mjs';
 import { loginOf, ownerLogins, ownersForFile, readCodeowners } from './codeowners.mjs';
 import { PROTECTED_LABEL, fail, github, readGithubEvent } from './github-api.mjs';
+import { codeOwnerRuleset, fetchBranchRules } from './branch-rules.mjs';
 
 export { PROTECTED_LABEL, readGithubEvent, github };
 
-const MISSING_REVIEW = 'APPROVED review on the head SHA from an owner who is not the author';
+// pull_request and pull_request_review set GITHUB_REF to the PR merge branch
+// refs/pull/PULL_REQUEST_NUMBER/merge. A workflow run on those events uses the
+// workflow from that merge commit, which the pull request can edit.
+// https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows
+//
+// pull_request_target runs in the context of the default branch. This sensor
+// reads harness.yaml from the checkout (the base) and diffs the fetched head
+// as data. It does not import the yaml package: the workflow does not npm install.
+// https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target
+//
+// A protected path exits 0 only when branch-rules.mjs finds an active
+// pull_request rule with require_code_owner_review. Otherwise the label
+// decides. If the rules cannot be read, this sensor exits 2. That module
+// is the only place those rule names are defined.
+// https://docs.github.com/en/rest/repos/rules
+export const RULESET_DECISION =
+  'ruleset decides: pull request rule (require review from code owners); required reviewer rule';
+
+const CLOSED = 'The check failed closed and the label route applies.';
 const MISSING_LABEL = `label ${PROTECTED_LABEL} added by a CODEOWNERS owner`;
 const MISSING_PUSH = 'direct push to the default branch with no pull request';
 const MISSING_OWNER = 'a CODEOWNERS owner';
+const PULL_EVENTS = new Set(['pull_request', 'pull_request_target']);
+
+const LIST_KEYS = {
+  'protect.checkPaths': 'checkPaths',
+  'review.humanRequired.paths': 'paths',
+  'review.humanRequired.patterns': 'patterns',
+};
 
 function gitOut(root, args) {
   const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
@@ -33,34 +62,114 @@ function repoOf(env, event) {
   return env.GITHUB_REPOSITORY || event?.repository?.full_name || '';
 }
 
-function rulesForFile(file, diff, config) {
-  const rules = [];
+function unquote(value) {
+  const text = String(value || '').trim();
+  if (text.length >= 2 && text.startsWith("'") && text.endsWith("'")) {
+    return text.slice(1, -1).replace(/''/g, "'");
+  }
+  if (text.length >= 2 && text.startsWith('"') && text.endsWith('"')) {
+    return text.slice(1, -1).replace(/\\"/g, '"');
+  }
+  return text;
+}
+
+/**
+ * Read the three lists this sensor needs from harness.yaml.
+ * Node has no built-in YAML parser, and this job must not npm install.
+ * Only the indentation and list shape of this repo's file is read.
+ * A missing key falls back to the same defaults as harness.yaml.
+ */
+export function listsFromHarnessYaml(text) {
+  const found = {};
+  const stack = [];
+  let listName = '';
+  let listIndent = -1;
+  for (const raw of String(text || '').split('\n')) {
+    if (!raw.trim() || raw.trim().startsWith('#')) continue;
+    const indent = raw.match(/^ */)[0].length;
+    const trimmed = raw.trim();
+    if (listName && trimmed.startsWith('- ') && indent > listIndent) {
+      found[listName].push(unquote(trimmed.slice(2)));
+      continue;
+    }
+    listName = '';
+    const key = trimmed.match(/^([A-Za-z0-9_.-]+)\s*:/)?.[1];
+    if (!key) continue;
+    while (stack.length && stack[stack.length - 1].indent >= indent) stack.pop();
+    stack.push({ indent, key });
+    const trail = stack.map((item) => item.key).join('.');
+    const name = LIST_KEYS[trail];
+    if (!name) continue;
+    listName = name;
+    listIndent = indent;
+    found[name] = [];
+  }
+  return found;
+}
+
+function sensorConfig(root) {
+  let text = '';
+  try {
+    text = fs.readFileSync(path.join(root, 'harness.yaml'), 'utf8');
+  } catch {
+    text = '';
+  }
+  const lists = listsFromHarnessYaml(text);
+  const pick = (name, fallback) => (lists[name]?.length ? lists[name] : [...fallback]);
+  return {
+    protect: { checkPaths: pick('checkPaths', DEFAULT_CHECK_PATHS) },
+    review: {
+      humanRequired: {
+        paths: pick('paths', DEFAULT_HUMAN_PATHS),
+        patterns: pick('patterns', DEFAULT_HUMAN_PATTERNS),
+      },
+    },
+  };
+}
+
+function unique(items) {
+  const out = [];
+  for (const item of items) {
+    if (!out.includes(item)) out.push(item);
+  }
+  return out;
+}
+
+function pathRulesFor(file, config) {
   const checkPaths = config?.protect?.checkPaths;
-  const paths = Array.isArray(checkPaths) && checkPaths.length ? checkPaths : [];
-  const { paths: humanPaths, patterns } = humanRequiredConfig(config);
-  const listed = paths.length ? paths : humanPaths;
+  const humanPaths = config?.review?.humanRequired?.paths || [];
+  const listed = Array.isArray(checkPaths) && checkPaths.length ? checkPaths : [];
+  const rules = [];
   for (const pattern of listed) {
-    if (pathIsProtected(file, [pattern]) && !rules.includes(pattern)) rules.push(pattern);
+    if (pathIsProtected(file, [pattern])) rules.push(pattern);
   }
   for (const pattern of humanPaths) {
-    if (minimatchLike(file, pattern) && !rules.includes(pattern)) rules.push(pattern);
+    if (pathIsProtected(file, [pattern])) rules.push(pattern);
   }
+  return unique(rules);
+}
+
+function patternRulesFor(file, diff, config) {
+  const patterns = config?.review?.humanRequired?.patterns || [];
+  const rules = [];
   for (const row of addedLines(diff)) {
     if (row.file !== file) continue;
     for (const pattern of patterns) {
-      if (patternHits(pattern, row.text) && !rules.includes(pattern)) rules.push(pattern);
+      if (patternHits(pattern, row.text)) rules.push(pattern);
     }
   }
-  return rules;
+  return unique(rules);
 }
 
-function protectedFiles(names, diff, config) {
+function classifiedFiles(names, diff, config) {
   const seen = new Set(names);
   for (const row of addedLines(diff)) seen.add(row.file);
   const files = [];
   for (const file of seen) {
-    const rules = rulesForFile(file, diff, config);
-    if (rules.length) files.push({ file, rules });
+    const paths = pathRulesFor(file, config);
+    const patterns = patternRulesFor(file, diff, config);
+    if (!paths.length && !patterns.length) continue;
+    files.push({ file, paths, patterns, rules: unique([...paths, ...patterns]) });
   }
   return files;
 }
@@ -70,34 +179,6 @@ function span(root, base, head) {
     names: namesFrom(gitOut(root, ['diff', '--name-only', `${base}...${head}`])),
     diff: gitOut(root, ['diff', '-U0', `${base}...${head}`]),
   };
-}
-
-function isSolo(owners, author) {
-  return owners.length === 1 && owners[0] === author;
-}
-
-function latestReviews(reviews) {
-  const byUser = new Map();
-  for (const review of reviews || []) {
-    const login = loginOf(review?.user?.login);
-    if (!login) continue;
-    const at = Date.parse(review.submitted_at || '') || 0;
-    const prev = byUser.get(login);
-    if (!prev || at >= prev.at) byUser.set(login, { at, review });
-  }
-  return [...byUser.values()].map((row) => row.review);
-}
-
-function reviewApprover(reviews, owners, author, head) {
-  for (const review of latestReviews(reviews)) {
-    const login = loginOf(review?.user?.login);
-    if (!login || login === author) continue;
-    if (review.state !== 'APPROVED') continue;
-    if (review.commit_id !== head) continue;
-    if (!owners.includes(login)) continue;
-    return login;
-  }
-  return '';
 }
 
 function labelApprover(labels, timeline, owners, cutoff) {
@@ -127,30 +208,50 @@ function synchronizeCutoff(event, pr) {
   return pr?.updated_at || event?.pull_request?.updated_at || '9999-12-31T00:00:00Z';
 }
 
-function decideFile(file, owners, author, reviews, labelActor) {
-  if (!owners.length) {
-    return { ...file, owners, route: '', approver: '', missing: MISSING_OWNER };
+function decidePattern(file, labelActor) {
+  if (!file.owners.length) {
+    return { ...file, route: '', approver: '', missing: MISSING_OWNER };
   }
-  if (isSolo(owners, author)) {
-    if (labelActor) {
-      return { ...file, owners, route: 'label', approver: labelActor, missing: '' };
-    }
-    return { ...file, owners, route: '', approver: '', missing: MISSING_LABEL };
+  if (labelActor) {
+    return { ...file, route: 'label', approver: labelActor, missing: '' };
   }
-  const approver = reviewApprover(reviews, owners, author, file.head);
-  if (approver) return { ...file, owners, route: 'review', approver, missing: '' };
-  return { ...file, owners, route: '', approver: '', missing: MISSING_REVIEW };
+  return { ...file, route: '', approver: '', missing: MISSING_LABEL };
+}
+
+function decideFile(file, labelActor, ruleset) {
+  if (file.patterns.length) return decidePattern(file, labelActor);
+  if (ruleset) {
+    return {
+      ...file,
+      route: 'ruleset',
+      approver: '',
+      missing: '',
+      rulesetSource: ruleset.source,
+      rulesetId: ruleset.id,
+    };
+  }
+  return decidePattern(file, labelActor);
 }
 
 function formatText(files, skipped) {
   if (skipped) return 'skipped (no pull request)\n';
-  const lines = files.map((file) => {
+  const lines = [];
+  for (const file of files) {
     const owners = file.owners.length ? file.owners.join(', ') : '(none)';
-    if (file.missing) {
-      return `${file.file} matched ${file.rules.join(', ')} owners: ${owners} missing: ${file.missing}`;
+    if (file.route === 'ruleset' && !file.missing) {
+      lines.push(
+        `${file.file} matched ${file.rules.join(', ')} ${RULESET_DECISION} ruleset_source ${file.rulesetSource} ruleset_id ${file.rulesetId}`,
+      );
+      continue;
     }
-    return `${file.file} approver ${file.approver} route ${file.route}`;
-  });
+    if (file.missing) {
+      lines.push(
+        `${file.file} matched ${file.rules.join(', ')} owners: ${owners} missing: ${file.missing}`,
+      );
+      continue;
+    }
+    lines.push(`${file.file} approver ${file.approver} route ${file.route}`);
+  }
   if (files.every((file) => !file.missing)) lines.push('protected-change ok');
   return lines.join('\n') + '\n';
 }
@@ -177,24 +278,27 @@ async function evaluatePull(root, env, event, pr) {
   const base = pr?.base?.sha;
   const head = pr?.head?.sha;
   const number = pr?.number;
-  const author = loginOf(pr?.user?.login);
   const repo = repoOf(env, event);
   if (!base || !head || !number || !repo)
     throw fail('pull request event is missing base, head, number, or repository');
-  const config = loadConfig(root);
+  const config = sensorConfig(root);
   const range = span(root, base, head);
-  const found = protectedFiles(range.names, range.diff, config).map((file) => ({ ...file, head }));
+  const found = classifiedFiles(range.names, range.diff, config).map((file) => ({
+    ...file,
+    head,
+  }));
   if (!found.length) return finish([]);
   const codeowners = readCodeowners(root);
   const withOwners = found.map((file) => ({
     ...file,
     owners: ownersForFile(codeowners, file.file),
   }));
-  const solo = withOwners.some((file) => isSolo(file.owners, author));
-  const reviewed = withOwners.some((file) => file.owners.length && !isSolo(file.owners, author));
-  const reviews = reviewed ? await github(env, `/repos/${repo}/pulls/${number}/reviews`) : [];
+  const pathFiles = withOwners.filter((file) => file.paths.length && !file.patterns.length);
+  const ruleset = await readCodeOwnerRuleset(env, event, pr);
+  const needsLabel =
+    withOwners.some((file) => file.patterns.length) || (pathFiles.length > 0 && !ruleset);
   let labelActor = '';
-  if (solo) {
+  if (needsLabel && env.GITHUB_TOKEN) {
     const [labels, timeline] = await Promise.all([
       github(env, `/repos/${repo}/issues/${number}/labels`),
       github(env, `/repos/${repo}/issues/${number}/timeline`),
@@ -206,10 +310,27 @@ async function evaluatePull(root, env, event, pr) {
       synchronizeCutoff(event, pr),
     );
   }
-  const decided = withOwners.map((file) =>
-    decideFile(file, file.owners, author, reviews, labelActor),
-  );
-  return finish(decided);
+  return finish(withOwners.map((file) => decideFile(file, labelActor, ruleset)));
+}
+
+function unread(cause) {
+  const text = String(cause || 'rules response could not be read').trim();
+  throw fail(text.endsWith(CLOSED) ? text : `${text} ${CLOSED}`);
+}
+
+async function readCodeOwnerRuleset(env, event, pr) {
+  if (!env.GITHUB_TOKEN) unread('GITHUB_TOKEN is missing.');
+  const branch = pr?.base?.ref || event?.repository?.default_branch;
+  if (!branch) unread('pull request base branch is missing.');
+  const repo = repoOf(env, event);
+  const slash = repo.indexOf('/');
+  if (slash <= 0) unread('repository is missing.');
+  try {
+    const rules = await fetchBranchRules(env, repo.slice(0, slash), repo.slice(slash + 1), branch);
+    return codeOwnerRuleset(rules);
+  } catch (err) {
+    unread(err instanceof Error ? err.message : String(err));
+  }
 }
 
 async function evaluatePush(root, env, event) {
@@ -223,9 +344,9 @@ async function evaluatePush(root, env, event) {
   if (Array.isArray(pulls) && pulls.length) return evaluatePull(root, env, event, pulls[0]);
   const before = event.before;
   if (!before || /^0+$/.test(before)) throw fail('push to the default branch has no base commit');
-  const config = loadConfig(root);
+  const config = sensorConfig(root);
   const range = span(root, before, sha);
-  const found = protectedFiles(range.names, range.diff, config).map((file) => ({
+  const found = classifiedFiles(range.names, range.diff, config).map((file) => ({
     ...file,
     owners: ownersForFile(readCodeowners(root), file.file),
   }));
@@ -239,10 +360,9 @@ export async function evaluateProtectedChange(root, env = process.env) {
   if (name === 'push') {
     const branch = event.repository?.default_branch || 'main';
     if ((event.ref || '') !== `refs/heads/${branch}`) return finish([], { skipped: true });
-  } else if (name !== 'pull_request' && name !== 'pull_request_review') {
+  } else if (!PULL_EVENTS.has(name)) {
     throw fail(`unsupported GitHub event ${name || '(none)'}`);
   }
-  if (!env.GITHUB_TOKEN) throw fail('GITHUB_TOKEN is missing');
   if (name === 'push') return evaluatePush(root, env, event);
   return evaluatePull(root, env, event, event.pull_request);
 }
@@ -265,7 +385,13 @@ if (isMain) {
       process.exit(result.exitCode);
     })
     .catch((err) => {
-      console.error(err.message || String(err));
+      const message = err.message || String(err);
+      try {
+        writeBody(root, { status: 'fail', reason: message, files: [] });
+      } catch {
+        // The exit code is the decision. A state-file write must not hide it.
+      }
+      console.error(message);
       process.exit(err.exitCode || 2);
     });
 }

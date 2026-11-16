@@ -11,6 +11,7 @@ import { computeTreeHash } from './tree-hash.mjs';
 import { runInstall } from './install.mjs';
 import { renderAdapter } from './render/render.mjs';
 import { sessionStart } from './enforce/session_start.mjs';
+import { recordCredentials } from './enforce/credentials.mjs';
 import { preTool } from './enforce/pre_tool.mjs';
 import { postTool } from './enforce/post_tool.mjs';
 import { stopSequence, preCommitGate } from './enforce/stop.mjs';
@@ -142,13 +143,24 @@ async function readStdinJson() {
   }
 }
 
-function ciOnlyNames(root) {
+function listedSensors(root) {
   const sensorsFile = path.join(root, 'harness', 'sensors', 'sensors.yaml');
   if (!fs.existsSync(sensorsFile)) return [];
-  return loadSensors(root)
+  return loadSensors(root).filter((sensor) => sensor.enabled !== false);
+}
+
+function baseBranchWorkflowNames(root) {
+  return listedSensors(root)
+    .filter((sensor) => sensor.name === 'protected-change' && sensor.tier === 'manual')
+    .map((sensor) => sensor.name);
+}
+
+function ciOnlyNames(root) {
+  const workflow = new Set(baseBranchWorkflowNames(root));
+  return listedSensors(root)
     .filter(
       (sensor) =>
-        sensor.enabled !== false &&
+        !workflow.has(sensor.name) &&
         Array.isArray(sensor.where) &&
         sensor.where.includes('ci') &&
         !sensor.where.includes('local'),
@@ -258,6 +270,7 @@ async function main() {
       const humanPaths = config.review?.humanRequired?.paths || [];
       console.log(`humanRequired.paths: ${humanPaths.join(', ')}`);
       console.log(`CI-only: ${ciOnlyNames(ROOT).join(', ')}`);
+      console.log(`base-branch workflow: ${baseBranchWorkflowNames(ROOT).join(', ')}`);
       console.log('');
       console.log(formatAssignmentBlock(config));
       console.log('');
@@ -353,12 +366,15 @@ async function main() {
 
       if (isMoment(moment, ['session_start', 'SessionStart', 'sessionStart'])) {
         const info = sessionStart(ROOT, config);
+        recordCredentials(ROOT, info.credentials);
+        console.error(info.credentials.text);
         console.log(
           JSON.stringify({
             ok: true,
             continue: true,
             moment: 'sessionStart',
             treeHash: info.treeHash,
+            credentials: info.credentials,
           }),
         );
         process.exit(0);

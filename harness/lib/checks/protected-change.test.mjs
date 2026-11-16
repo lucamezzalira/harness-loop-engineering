@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { parse as parseYaml } from 'yaml';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const SENSOR = path.join(ROOT, 'harness', 'sensors', 'checks', 'protected-change.sh');
@@ -73,14 +74,34 @@ function startMock(state) {
     /** @type {unknown} */
     let body = [];
     let status = 200;
-    if (state.failReviews && url.pathname.endsWith('/reviews')) {
+    if (
+      state.failReviews &&
+      (url.pathname.endsWith('/reviews') ||
+        url.pathname.endsWith('/labels') ||
+        url.pathname.endsWith('/timeline'))
+    ) {
       status = 500;
       body = { message: 'nope' };
     } else if (url.pathname.endsWith('/reviews')) body = state.reviews;
     else if (url.pathname.endsWith('/timeline')) body = state.timeline;
     else if (url.pathname.endsWith('/labels')) body = state.labels.map((name) => ({ name }));
     else if (url.pathname.endsWith('/pulls')) body = state.pulls;
-    else {
+    else if (url.pathname.includes('/rules/branches/')) {
+      if (state.rulesStatus) {
+        status = state.rulesStatus;
+        body = { message: 'nope' };
+      } else if (Array.isArray(state.rules)) body = state.rules;
+      else {
+        body = [
+          {
+            type: 'pull_request',
+            ruleset_source: 'acme/demo',
+            ruleset_id: 42,
+            parameters: { require_code_owner_review: true },
+          },
+        ];
+      }
+    } else {
       status = 404;
       body = { message: 'missing' };
     }
@@ -158,10 +179,10 @@ test('A-64 a protected change with no review fails and names the file, rule, and
       GITHUB_API_URL: mock.url,
     });
     const out = `${ran.stdout}\n${ran.stderr}`;
-    assert.equal(ran.status, 1, out);
+    assert.equal(ran.status, 0, out);
     assert.match(out, /harness\.yaml/);
     assert.match(out, /matched harness\.yaml/);
-    assert.match(out, /owners: ada/);
+    assert.match(out, /ruleset decides/);
 
     fs.mkdirSync(path.join(root, 'harness', 'sensors', 'checks'), { recursive: true });
     fs.writeFileSync(
@@ -205,7 +226,8 @@ test('A-64 a protected change with no review fails and names the file, rule, and
     assert.equal(reported.status, 0, reported.stdout + reported.stderr);
     const report = JSON.parse(reported.stdout);
     assert.equal(report.files[0].file, 'harness.yaml');
-    assert.equal(report.status, 'fail');
+    assert.equal(report.files[0].route, 'ruleset');
+    assert.equal(report.status, 'pass');
     const statusRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-status-ci-'));
     fs.writeFileSync(path.join(statusRoot, 'harness.local.yaml'), 'tool: cursor\n');
     fs.mkdirSync(path.join(statusRoot, 'harness', 'sensors'), { recursive: true });
@@ -240,45 +262,57 @@ test('A-64 a protected change with no review fails and names the file, rule, and
   }
 });
 
-test('A-65 an owner review on the head SHA passes, and the author review does not', async () => {
+test('A-65 a review does not decide a pattern, and a protected path reports the ruleset', async () => {
   const root = initRepo();
   const base = git(root, ['rev-parse', 'HEAD']);
-  fs.writeFileSync(path.join(root, 'harness.yaml'), 'project:\n  name: demo\n');
-  const head = commitAll(root, 'edit harness');
+  fs.mkdirSync(path.join(root, 'notes'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'notes', 'schema.sql'), 'DROP TABLE users;\n');
+  const head = commitAll(root, 'drop');
   fs.mkdirSync(path.join(root, '.github'), { recursive: true });
-  fs.writeFileSync(path.join(root, '.github', 'CODEOWNERS'), 'harness.yaml @ada\n');
+  fs.writeFileSync(path.join(root, '.github', 'CODEOWNERS'), 'notes/schema.sql @ada\n');
   const eventPath = writeEvent(root, pullEvent(base, head, { author: 'dev' }));
-  const state = { reviews: [], timeline: [], labels: [], pulls: [], failReviews: false };
-  const mock = await startMock(state);
-  try {
-    state.reviews = [
+  const state = {
+    reviews: [
       {
         user: { login: 'dev' },
         state: 'APPROVED',
         commit_id: head,
         submitted_at: '2026-01-01T00:00:00Z',
       },
-    ];
-    const authorOnly = await runSensor(root, {
+      {
+        user: { login: 'ada' },
+        state: 'APPROVED',
+        commit_id: head,
+        submitted_at: '2026-01-02T00:00:00Z',
+      },
+    ],
+    timeline: [],
+    labels: [],
+    pulls: [],
+    failReviews: false,
+  };
+  const mock = await startMock(state);
+  try {
+    const reviewed = await runSensor(root, {
       GITHUB_EVENT_NAME: 'pull_request',
       GITHUB_EVENT_PATH: eventPath,
       GITHUB_API_URL: mock.url,
     });
-    assert.equal(authorOnly.status, 1, authorOnly.stdout + authorOnly.stderr);
-    state.reviews.push({
-      user: { login: 'ada' },
-      state: 'APPROVED',
-      commit_id: head,
-      submitted_at: '2026-01-02T00:00:00Z',
-    });
-    const owned = await runSensor(root, {
-      GITHUB_EVENT_NAME: 'pull_request_review',
-      GITHUB_EVENT_PATH: eventPath,
+    const out = reviewed.stdout + reviewed.stderr;
+    assert.equal(reviewed.status, 1, out);
+    assert.match(out, /DROP\\s\+TABLE/);
+    assert.doesNotMatch(out, /route review/);
+    fs.writeFileSync(path.join(root, 'harness.yaml'), 'project:\n  name: demo\n');
+    const pathHead = commitAll(root, 'edit harness');
+    const pathEvent = writeEvent(root, pullEvent(head, pathHead, { author: 'dev' }));
+    const ruleset = await runSensor(root, {
+      GITHUB_EVENT_NAME: 'pull_request',
+      GITHUB_EVENT_PATH: pathEvent,
       GITHUB_API_URL: mock.url,
     });
-    const out = owned.stdout + owned.stderr;
-    assert.equal(owned.status, 0, out);
-    assert.match(out, /harness\.yaml approver ada route review/);
+    const rulesetOut = ruleset.stdout + ruleset.stderr;
+    assert.equal(ruleset.status, 0, rulesetOut);
+    assert.match(rulesetOut, /harness\.yaml matched harness\.yaml ruleset decides/);
   } finally {
     await mock.close();
     fs.rmSync(root, { recursive: true, force: true });
@@ -288,10 +322,11 @@ test('A-65 an owner review on the head SHA passes, and the author review does no
 test('A-66 an approval on an older commit does not count', async () => {
   const root = initRepo();
   const base = git(root, ['rev-parse', 'HEAD']);
-  fs.writeFileSync(path.join(root, 'harness.yaml'), 'project:\n  name: demo\n');
-  const head = commitAll(root, 'edit harness');
+  fs.mkdirSync(path.join(root, 'notes'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'notes', 'schema.sql'), 'DROP TABLE users;\n');
+  const head = commitAll(root, 'drop');
   fs.mkdirSync(path.join(root, '.github'), { recursive: true });
-  fs.writeFileSync(path.join(root, '.github', 'CODEOWNERS'), 'harness.yaml @ada\n');
+  fs.writeFileSync(path.join(root, '.github', 'CODEOWNERS'), 'notes/schema.sql @ada\n');
   const eventPath = writeEvent(root, pullEvent(base, head));
   const state = {
     reviews: [
@@ -315,6 +350,7 @@ test('A-66 an approval on an older commit does not count', async () => {
       GITHUB_API_URL: mock.url,
     });
     assert.equal(stale.status, 1, stale.stdout + stale.stderr);
+    assert.doesNotMatch(stale.stdout, /route review/);
     state.reviews = [
       {
         user: { login: 'ada' },
@@ -328,7 +364,9 @@ test('A-66 an approval on an older commit does not count', async () => {
       GITHUB_EVENT_PATH: eventPath,
       GITHUB_API_URL: mock.url,
     });
-    assert.equal(current.status, 0, current.stdout + current.stderr);
+    const out = current.stdout + current.stderr;
+    assert.equal(current.status, 1, out);
+    assert.doesNotMatch(out, /route review/);
   } finally {
     await mock.close();
     fs.rmSync(root, { recursive: true, force: true });
@@ -338,13 +376,14 @@ test('A-66 an approval on an older commit does not count', async () => {
 test('A-67 the solo label passes, a synchronize removes it, and a backdated committer date does not matter', async () => {
   const root = initRepo();
   const base = git(root, ['rev-parse', 'HEAD']);
-  fs.writeFileSync(path.join(root, 'harness.yaml'), 'project:\n  name: demo\n');
-  const head = commitAll(root, 'edit harness', {
+  fs.mkdirSync(path.join(root, 'notes'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'notes', 'schema.sql'), 'DROP TABLE users;\n');
+  const head = commitAll(root, 'drop', {
     GIT_AUTHOR_DATE: '2099-01-01T00:00:00Z',
     GIT_COMMITTER_DATE: '2099-01-01T00:00:00Z',
   });
   fs.mkdirSync(path.join(root, '.github'), { recursive: true });
-  fs.writeFileSync(path.join(root, '.github', 'CODEOWNERS'), 'harness.yaml @solo\n');
+  fs.writeFileSync(path.join(root, '.github', 'CODEOWNERS'), 'notes/schema.sql @solo\n');
   const eventPath = writeEvent(root, pullEvent(base, head, { author: 'solo', action: 'opened' }));
   const state = {
     reviews: [],
@@ -429,10 +468,11 @@ test('A-67 the label job loads from a tree that has no node_modules', () => {
 test('A-87 a label older than the synchronize event does not count', async () => {
   const root = initRepo();
   const base = git(root, ['rev-parse', 'HEAD']);
-  fs.writeFileSync(path.join(root, 'harness.yaml'), 'project:\n  name: demo\n');
-  const head = commitAll(root, 'edit harness');
+  fs.mkdirSync(path.join(root, 'notes'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'notes', 'schema.sql'), 'DROP TABLE users;\n');
+  const head = commitAll(root, 'drop');
   fs.mkdirSync(path.join(root, '.github'), { recursive: true });
-  fs.writeFileSync(path.join(root, '.github', 'CODEOWNERS'), 'harness.yaml @solo\n');
+  fs.writeFileSync(path.join(root, '.github', 'CODEOWNERS'), 'notes/schema.sql @solo\n');
   const event = pullEvent(base, head, {
     author: 'solo',
     action: 'synchronize',
@@ -480,10 +520,11 @@ test('A-87 a label older than the synchronize event does not count', async () =>
 test('A-68 a label added by someone outside CODEOWNERS does not count', async () => {
   const root = initRepo();
   const base = git(root, ['rev-parse', 'HEAD']);
-  fs.writeFileSync(path.join(root, 'harness.yaml'), 'project:\n  name: demo\n');
-  const head = commitAll(root, 'edit harness');
+  fs.mkdirSync(path.join(root, 'notes'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'notes', 'schema.sql'), 'DROP TABLE users;\n');
+  const head = commitAll(root, 'drop');
   fs.mkdirSync(path.join(root, '.github'), { recursive: true });
-  fs.writeFileSync(path.join(root, '.github', 'CODEOWNERS'), 'harness.yaml @solo\n');
+  fs.writeFileSync(path.join(root, '.github', 'CODEOWNERS'), 'notes/schema.sql @solo\n');
   const eventPath = writeEvent(root, pullEvent(base, head, { author: 'solo' }));
   const mock = await startMock({
     reviews: [],
@@ -507,7 +548,7 @@ test('A-68 a label added by someone outside CODEOWNERS does not count', async ()
     });
     const out = ran.stdout + ran.stderr;
     assert.equal(ran.status, 1, out);
-    assert.match(out, /harness\.yaml/);
+    assert.match(out, /notes\/schema\.sql/);
     assert.doesNotMatch(out, /approver intruder/);
   } finally {
     await mock.close();
@@ -537,12 +578,13 @@ test('A-69 a human-required line needs approval even when the path is not protec
     assert.match(blockedOut, /notes\/schema\.sql/);
     assert.match(blockedOut, /DROP\\s\+TABLE/);
     assert.match(blockedOut, /owners: ada/);
-    state.reviews = [
+    state.labels = [LABEL];
+    state.timeline = [
       {
-        user: { login: 'ada' },
-        state: 'APPROVED',
-        commit_id: head,
-        submitted_at: '2026-01-02T00:00:00Z',
+        event: 'labeled',
+        actor: { login: 'ada' },
+        label: { name: LABEL },
+        created_at: '2026-01-02T00:00:00Z',
       },
     ];
     const allowed = await runSensor(root, {
@@ -551,6 +593,7 @@ test('A-69 a human-required line needs approval even when the path is not protec
       GITHUB_API_URL: mock.url,
     });
     assert.equal(allowed.status, 0, allowed.stdout + allowed.stderr);
+    assert.match(allowed.stdout, /approver ada route label/);
   } finally {
     await mock.close();
     fs.rmSync(root, { recursive: true, force: true });
@@ -647,10 +690,17 @@ test('A-72 a missing token or a GitHub API error exits 2', async () => {
     GITHUB_EVENT_PATH: eventPath,
     GITHUB_TOKEN: '',
   });
-  assert.equal(missing.status, 2, missing.stdout + missing.stderr);
-  assert.match(missing.stderr, /GITHUB_TOKEN/);
+  const missingOut = missing.stdout + missing.stderr;
+  assert.equal(missing.status, 2, missingOut);
+  assert.notEqual(missing.status, 0);
+  assert.match(missingOut, /GITHUB_TOKEN is missing/);
+  assert.match(missingOut, /The check failed closed and the label route applies/);
+  fs.mkdirSync(path.join(root, 'notes'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'notes', 'schema.sql'), 'DROP TABLE users;\n');
+  const patterned = commitAll(root, 'drop');
   fs.mkdirSync(path.join(root, '.github'), { recursive: true });
-  fs.writeFileSync(path.join(root, '.github', 'CODEOWNERS'), 'harness.yaml @ada\n');
+  fs.writeFileSync(path.join(root, '.github', 'CODEOWNERS'), 'notes/schema.sql @ada\n');
+  const patternedEvent = writeEvent(root, pullEvent(base, patterned));
   const mock = await startMock({
     reviews: [],
     timeline: [],
@@ -661,13 +711,544 @@ test('A-72 a missing token or a GitHub API error exits 2', async () => {
   try {
     const broken = await runSensor(root, {
       GITHUB_EVENT_NAME: 'pull_request',
-      GITHUB_EVENT_PATH: eventPath,
+      GITHUB_EVENT_PATH: patternedEvent,
       GITHUB_API_URL: mock.url,
     });
     const out = broken.stdout + broken.stderr;
     assert.equal(broken.status, 2, out);
     assert.match(out, /GitHub API 500/);
     assert.notEqual(broken.status, 0);
+  } finally {
+    await mock.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+const WORKFLOW = path.join(ROOT, '.github', 'workflows', 'protected-change.yml');
+const SECURITY_DOC =
+  'https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target';
+
+function localImports(file, seen = new Set()) {
+  if (seen.has(file)) return seen;
+  seen.add(file);
+  const text = fs.readFileSync(file, 'utf8');
+  if (/from ['"]yaml['"]/.test(text)) seen.add('yaml');
+  for (const match of text.matchAll(/from '(\.[^']+)'/g)) {
+    let next = path.resolve(path.dirname(file), match[1]);
+    if (!next.endsWith('.mjs')) next += '.mjs';
+    localImports(next, seen);
+  }
+  return seen;
+}
+
+function jobSteps(job) {
+  return Array.isArray(job?.steps) ? job.steps : [];
+}
+
+test('A-101 and A-118 the base-branch workflow parses and does not run the pull request', () => {
+  const raw = fs.readFileSync(WORKFLOW, 'utf8');
+  const doc = parseYaml(raw);
+  const trigger = doc.on.pull_request_target;
+  assert.ok(trigger, 'trigger is pull_request_target');
+  for (const type of ['opened', 'synchronize', 'reopened', 'labeled', 'unlabeled']) {
+    assert.ok(trigger.types.includes(type), type);
+  }
+  assert.equal(doc.on.pull_request, undefined);
+  assert.equal(doc.on.pull_request_review, undefined);
+  assert.match(raw, /securely-using-pull_request_target/);
+  assert.match(raw, /BASE_SHA:\s*\$\{\{\s*github\.event\.pull_request\.base\.sha\s*\}\}/);
+  const guidance = fs.readFileSync(
+    path.join(ROOT, 'harness', 'sensors', 'guidance', 'protected-change.md'),
+    'utf8',
+  );
+  assert.match(guidance, /securely-using-pull_request_target/);
+  assert.match(guidance, /reads the pull request as data|read as data/);
+  const sensorJob = doc.jobs['protected-change'];
+  assert.equal(sensorJob.permissions.contents, 'read');
+  assert.equal(sensorJob.permissions['pull-requests'], 'read');
+  assert.equal(sensorJob.permissions.issues, 'read');
+  assert.notEqual(sensorJob.permissions.issues, 'write');
+  assert.equal(doc.jobs['clear-protected-label'].permissions.issues, 'write');
+  for (const job of Object.values(doc.jobs)) {
+    for (const step of jobSteps(job)) {
+      const ref = String(step.with?.ref || '');
+      assert.doesNotMatch(ref, /head\.sha|head\.ref|\/head|\/merge/);
+      assert.doesNotMatch(ref, /github\.event\.pull_request/);
+      if (String(step.uses || '').startsWith('actions/checkout@')) {
+        assert.match(ref, /env\.BASE_SHA/);
+      }
+      const run = String(step.run || '');
+      assert.doesNotMatch(run, /\bnpm (?:install|ci)\b/);
+      assert.doesNotMatch(run, /\bgit checkout\b/);
+      assert.doesNotMatch(run, /node\s+\S*refs\/pull/);
+    }
+  }
+  assert.equal(localImports(MODULE).has('yaml'), false);
+  assert.equal(localImports(CLEAR).has('yaml'), false);
+  assert.equal(SECURITY_DOC.includes('securely-using-pull_request_target'), true);
+});
+
+test('A-104 ci.yml does not run protected-change and status names the base-branch workflow', () => {
+  const ci = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8');
+  assert.doesNotMatch(ci, /protected-change/);
+  const sensors = fs.readFileSync(path.join(ROOT, 'harness', 'sensors', 'sensors.yaml'), 'utf8');
+  assert.match(sensors, /name: protected-change[\s\S]*tier: manual/);
+  const local = path.join(ROOT, 'harness.local.yaml');
+  const created = !fs.existsSync(local);
+  if (created) fs.writeFileSync(local, 'tool: cursor\nprofile: default\n');
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-status-'));
+  try {
+    const status = spawnSync(
+      process.execPath,
+      [path.join(ROOT, 'harness', 'lib', 'cli.mjs'), '--status'],
+      {
+        cwd,
+        encoding: 'utf8',
+        env: { ...process.env, HARNESS_ROOT: ROOT },
+      },
+    );
+    assert.equal(status.status, 0, status.stderr || status.stdout);
+    assert.match(status.stdout, /base-branch workflow: protected-change/);
+  } finally {
+    if (created) fs.rmSync(local, { force: true });
+    fs.rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('A-102 a poisoned head still fails on the base copy of the sensor', async () => {
+  const root = initRepo();
+  fs.writeFileSync(
+    path.join(root, 'harness.yaml'),
+    "review:\n  humanRequired:\n    patterns:\n      - 'DROP\\s+TABLE'\n",
+  );
+  commitAll(root, 'base config');
+  const base = git(root, ['rev-parse', 'HEAD']);
+  git(root, ['checkout', '-b', 'pr']);
+  fs.mkdirSync(path.join(root, 'harness', 'lib', 'checks'), { recursive: true });
+  fs.writeFileSync(
+    path.join(root, 'harness', 'lib', 'checks', 'protected-change.mjs'),
+    'process.exit(0)\nDROP TABLE users\n',
+  );
+  const head = commitAll(root, 'poison');
+  git(root, ['checkout', 'main']);
+  fs.mkdirSync(path.join(root, '.github'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.github', 'CODEOWNERS'), 'harness/lib/checks/** @ada\n');
+  const poisoned = git(root, ['show', `${head}:harness/lib/checks/protected-change.mjs`]);
+  assert.match(poisoned, /process\.exit\(0\)/);
+  assert.doesNotMatch(fs.readFileSync(MODULE, 'utf8'), /process\.exit\(0\)/);
+  const eventPath = writeEvent(root, pullEvent(base, head, { author: 'dev' }));
+  fs.mkdirSync(path.join(root, 'harness', 'state'), { recursive: true });
+  fs.writeFileSync(
+    path.join(root, 'harness', 'state', 'protected-change.json'),
+    JSON.stringify({ status: 'pass', files: [] }) + '\n',
+  );
+  const mock = await startMock({
+    reviews: [],
+    timeline: [],
+    labels: [],
+    pulls: [],
+    failReviews: false,
+  });
+  try {
+    const ran = await runSensor(root, {
+      GITHUB_EVENT_NAME: 'pull_request_target',
+      GITHUB_EVENT_PATH: eventPath,
+      GITHUB_API_URL: mock.url,
+    });
+    const out = `${ran.stdout}\n${ran.stderr}`;
+    assert.equal(ran.status, 1, out);
+    assert.match(out, /DROP\\s\+TABLE/);
+    assert.doesNotMatch(out, /protected-change ok/);
+    const written = JSON.parse(
+      fs.readFileSync(path.join(root, 'harness', 'state', 'protected-change.json'), 'utf8'),
+    );
+    assert.equal(written.status, 'fail');
+  } finally {
+    await mock.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('A-103 the decision uses the base harness.yaml when the head deletes the pattern', async () => {
+  const root = initRepo();
+  fs.writeFileSync(
+    path.join(root, 'harness.yaml'),
+    "review:\n  humanRequired:\n    patterns:\n      - 'DROP\\s+TABLE'\n",
+  );
+  commitAll(root, 'base config');
+  const base = git(root, ['rev-parse', 'HEAD']);
+  git(root, ['checkout', '-b', 'pr']);
+  fs.writeFileSync(
+    path.join(root, 'harness.yaml'),
+    "review:\n  humanRequired:\n    patterns:\n      - 'NOT_A_REAL_PATTERN'\n",
+  );
+  fs.mkdirSync(path.join(root, 'notes'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'notes', 'schema.sql'), 'DROP TABLE users;\n');
+  const head = commitAll(root, 'strip pattern');
+  git(root, ['checkout', 'main']);
+  fs.mkdirSync(path.join(root, '.github'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.github', 'CODEOWNERS'), 'notes/schema.sql @ada\n');
+  const eventPath = writeEvent(root, pullEvent(base, head, { author: 'dev' }));
+  const mock = await startMock({
+    reviews: [],
+    timeline: [],
+    labels: [],
+    pulls: [],
+    failReviews: false,
+  });
+  try {
+    const ran = await runSensor(root, {
+      GITHUB_EVENT_NAME: 'pull_request_target',
+      GITHUB_EVENT_PATH: eventPath,
+      GITHUB_API_URL: mock.url,
+    });
+    const out = `${ran.stdout}\n${ran.stderr}`;
+    assert.equal(ran.status, 1, out);
+    assert.match(out, /DROP\\s\+TABLE/);
+    const headYaml = git(root, ['show', `${head}:harness.yaml`]);
+    assert.doesNotMatch(headYaml, /DROP\\s\+TABLE/);
+  } finally {
+    await mock.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('A-119 a pattern outside protected paths needs a current label, and a path reports the ruleset', async () => {
+  const root = initRepo();
+  fs.mkdirSync(path.join(root, 'notes'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'notes', 'schema.sql'), 'DROP TABLE users;\n');
+  const head = commitAll(root, 'drop');
+  const base = git(root, ['rev-parse', 'HEAD~1']);
+  fs.mkdirSync(path.join(root, '.github'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.github', 'CODEOWNERS'), 'notes/schema.sql @ada\n');
+  const eventPath = writeEvent(
+    root,
+    pullEvent(base, head, {
+      author: 'dev',
+      action: 'synchronize',
+      updated_at: '2026-06-01T00:00:00Z',
+    }),
+  );
+  const state = {
+    reviews: [],
+    timeline: [
+      {
+        event: 'labeled',
+        actor: { login: 'ada' },
+        label: { name: LABEL },
+        created_at: '2026-01-01T00:00:00Z',
+      },
+    ],
+    labels: [LABEL],
+    pulls: [],
+    failReviews: false,
+  };
+  const mock = await startMock(state);
+  try {
+    const stale = await runSensor(root, {
+      GITHUB_EVENT_NAME: 'pull_request_target',
+      GITHUB_EVENT_PATH: eventPath,
+      GITHUB_API_URL: mock.url,
+    });
+    const staleOut = `${stale.stdout}\n${stale.stderr}`;
+    assert.equal(stale.status, 1, staleOut);
+    assert.match(staleOut, /notes\/schema\.sql/);
+    assert.match(staleOut, /DROP\\s\+TABLE/);
+    state.timeline.push({
+      event: 'labeled',
+      actor: { login: 'ada' },
+      label: { name: LABEL },
+      created_at: '2026-07-01T00:00:00Z',
+    });
+    const fresh = await runSensor(root, {
+      GITHUB_EVENT_NAME: 'pull_request_target',
+      GITHUB_EVENT_PATH: eventPath,
+      GITHUB_API_URL: mock.url,
+    });
+    assert.equal(fresh.status, 0, fresh.stdout + fresh.stderr);
+    assert.match(fresh.stdout, /approver ada route label/);
+
+    const pathRoot = initRepo();
+    const pathBase = git(pathRoot, ['rev-parse', 'HEAD']);
+    fs.writeFileSync(path.join(pathRoot, 'harness.yaml'), 'project:\n  name: demo\n');
+    const pathHead = commitAll(pathRoot, 'edit harness');
+    const pathEvent = writeEvent(pathRoot, pullEvent(pathBase, pathHead, { author: 'dev' }));
+    const ruleset = await runSensor(pathRoot, {
+      GITHUB_EVENT_NAME: 'pull_request_target',
+      GITHUB_EVENT_PATH: pathEvent,
+      GITHUB_API_URL: mock.url,
+    });
+    const rulesetOut = `${ruleset.stdout}\n${ruleset.stderr}`;
+    assert.equal(ruleset.status, 0, rulesetOut);
+    assert.match(
+      rulesetOut,
+      /ruleset decides: pull request rule \(require review from code owners\); required reviewer rule/,
+    );
+    assert.match(rulesetOut, /protected-change ok/);
+    fs.rmSync(pathRoot, { recursive: true, force: true });
+  } finally {
+    await mock.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+function harnessPull() {
+  const root = initRepo();
+  const base = git(root, ['rev-parse', 'HEAD']);
+  fs.writeFileSync(path.join(root, 'harness.yaml'), 'project:\n  name: demo\n');
+  const head = commitAll(root, 'edit harness');
+  fs.mkdirSync(path.join(root, '.github'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.github', 'CODEOWNERS'), 'harness.yaml @ada\n');
+  return { root, base, head };
+}
+
+test('A-120 no active ruleset sends a protected path back to the label', async () => {
+  const { root, base, head } = harnessPull();
+  const eventPath = writeEvent(
+    root,
+    pullEvent(base, head, {
+      action: 'synchronize',
+      updated_at: '2026-06-01T00:00:00Z',
+    }),
+  );
+  const state = { reviews: [], timeline: [], labels: [], pulls: [], rules: [] };
+  const mock = await startMock(state);
+  fs.mkdirSync(path.join(root, 'harness', 'state'), { recursive: true });
+  fs.writeFileSync(
+    path.join(root, 'harness', 'state', 'protected-change.json'),
+    JSON.stringify({ status: 'pass' }) + '\n',
+  );
+  try {
+    const bare = await spawnOut('bash', [SENSOR, '--ruleset-decides'], {
+      ...sensorEnv(root),
+      GITHUB_EVENT_NAME: 'pull_request_target',
+      GITHUB_EVENT_PATH: eventPath,
+      GITHUB_API_URL: mock.url,
+    });
+    const bareOut = `${bare.stdout}\n${bare.stderr}`;
+    assert.equal(bare.status, 1, bareOut);
+    assert.match(bareOut, /protected-change-approved/);
+    const planted = JSON.parse(
+      fs.readFileSync(path.join(root, 'harness', 'state', 'protected-change.json'), 'utf8'),
+    );
+    assert.equal(planted.status, 'fail');
+
+    state.labels.push(LABEL);
+    state.timeline.push({
+      event: 'labeled',
+      actor: { login: 'ada' },
+      label: { name: LABEL },
+      created_at: '2026-07-01T00:00:00Z',
+    });
+    const fresh = await runSensor(root, {
+      GITHUB_EVENT_NAME: 'pull_request_target',
+      GITHUB_EVENT_PATH: eventPath,
+      GITHUB_API_URL: mock.url,
+    });
+    assert.equal(fresh.status, 0, fresh.stdout + fresh.stderr);
+    assert.match(fresh.stdout, /approver ada route label/);
+
+    writeEvent(
+      root,
+      pullEvent(base, head, {
+        action: 'synchronize',
+        updated_at: '2026-08-01T00:00:00Z',
+      }),
+    );
+    const stale = await runSensor(root, {
+      GITHUB_EVENT_NAME: 'pull_request_target',
+      GITHUB_EVENT_PATH: eventPath,
+      GITHUB_API_URL: mock.url,
+    });
+    const staleOut = `${stale.stdout}\n${stale.stderr}`;
+    assert.equal(stale.status, 1, staleOut);
+    assert.match(staleOut, /protected-change-approved/);
+  } finally {
+    await mock.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('A-121 an active code owner rule names the ruleset source and id', async () => {
+  const { root, base, head } = harnessPull();
+  const eventPath = writeEvent(root, pullEvent(base, head));
+  const mock = await startMock({
+    reviews: [],
+    timeline: [],
+    labels: [],
+    pulls: [],
+    rules: [
+      {
+        type: 'pull_request',
+        ruleset_source: 'octo-org/octo-repo',
+        ruleset_id: 73,
+        parameters: { require_code_owner_review: true },
+      },
+    ],
+  });
+  try {
+    const ran = await runSensor(root, {
+      GITHUB_EVENT_NAME: 'pull_request_target',
+      GITHUB_EVENT_PATH: eventPath,
+      GITHUB_API_URL: mock.url,
+    });
+    const out = `${ran.stdout}\n${ran.stderr}`;
+    assert.equal(ran.status, 0, out);
+    assert.match(out, /ruleset_source octo-org\/octo-repo/);
+    assert.match(out, /ruleset_id 73/);
+  } finally {
+    await mock.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('A-122 a rules error does not pass a protected path', async () => {
+  const { root, base, head } = harnessPull();
+  const eventPath = writeEvent(root, pullEvent(base, head));
+  const mock = await startMock({
+    reviews: [],
+    timeline: [],
+    labels: [],
+    pulls: [],
+    rulesStatus: 500,
+  });
+  fs.mkdirSync(path.join(root, 'harness', 'state'), { recursive: true });
+  fs.writeFileSync(
+    path.join(root, 'harness', 'state', 'protected-change.json'),
+    JSON.stringify({ status: 'pass' }) + '\n',
+  );
+  try {
+    const broken = await spawnOut('bash', [SENSOR, '--ruleset-decides'], {
+      ...sensorEnv(root),
+      GITHUB_EVENT_NAME: 'pull_request_target',
+      GITHUB_EVENT_PATH: eventPath,
+      GITHUB_API_URL: mock.url,
+    });
+    const brokenOut = `${broken.stdout}\n${broken.stderr}`;
+    assert.equal(broken.status, 2, brokenOut);
+    assert.notEqual(broken.status, 0);
+    assert.match(brokenOut, /GitHub API 500/);
+    assert.match(brokenOut, /The check failed closed and the label route applies/);
+    const planted = JSON.parse(
+      fs.readFileSync(path.join(root, 'harness', 'state', 'protected-change.json'), 'utf8'),
+    );
+    assert.equal(planted.status, 'fail');
+    const missing = await runSensor(root, {
+      GITHUB_EVENT_NAME: 'pull_request_target',
+      GITHUB_EVENT_PATH: eventPath,
+      GITHUB_API_URL: mock.url,
+      GITHUB_TOKEN: '',
+    });
+    const missingOut = `${missing.stdout}\n${missing.stderr}`;
+    assert.equal(missing.status, 2, missingOut);
+    assert.notEqual(missing.status, 0);
+    assert.match(missingOut, /GITHUB_TOKEN is missing/);
+    assert.match(missingOut, /The check failed closed and the label route applies/);
+  } finally {
+    await mock.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('A-123 both sensors import the one rule-reading module', () => {
+  const pc = fs.readFileSync(path.join(ROOT, 'harness/lib/checks/protected-change.mjs'), 'utf8');
+  const pr = fs.readFileSync(path.join(ROOT, 'harness/lib/checks/platform-rules.mjs'), 'utf8');
+  assert.match(pc, /from '\.\/branch-rules\.mjs'/);
+  assert.match(pr, /from '\.\/branch-rules\.mjs'/);
+  const definitions = [];
+  function walk(dir) {
+    for (const name of fs.readdirSync(dir)) {
+      if (name === 'node_modules') continue;
+      const abs = path.join(dir, name);
+      if (fs.statSync(abs).isDirectory()) {
+        walk(abs);
+        continue;
+      }
+      if (!name.endsWith('.mjs') || name.endsWith('.test.mjs')) continue;
+      const text = fs.readFileSync(abs, 'utf8');
+      if (text.includes('export const PULL_FIELDS')) definitions.push(path.relative(ROOT, abs));
+    }
+  }
+  walk(path.join(ROOT, 'harness'));
+  assert.deepEqual(definitions, ['harness/lib/checks/branch-rules.mjs']);
+});
+
+test('A-124 a pattern line still needs the label whatever the rules API returns', async () => {
+  const root = initRepo();
+  fs.mkdirSync(path.join(root, 'notes'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'notes', 'schema.sql'), 'DROP TABLE users;\n');
+  const head = commitAll(root, 'drop');
+  const base = git(root, ['rev-parse', 'HEAD~1']);
+  fs.mkdirSync(path.join(root, '.github'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.github', 'CODEOWNERS'), 'notes/schema.sql @ada\n');
+  const eventPath = writeEvent(root, pullEvent(base, head));
+  const deciding = [
+    {
+      type: 'pull_request',
+      ruleset_source: 'acme/demo',
+      ruleset_id: 42,
+      parameters: { require_code_owner_review: true },
+    },
+  ];
+  const state = { reviews: [], timeline: [], labels: [], pulls: [], rules: deciding };
+  const mock = await startMock(state);
+  try {
+    const withRule = await runSensor(root, {
+      GITHUB_EVENT_NAME: 'pull_request_target',
+      GITHUB_EVENT_PATH: eventPath,
+      GITHUB_API_URL: mock.url,
+    });
+    assert.equal(withRule.status, 1, withRule.stdout + withRule.stderr);
+    assert.match(withRule.stdout, /DROP\\s\+TABLE/);
+    state.rules = [];
+    const without = await runSensor(root, {
+      GITHUB_EVENT_NAME: 'pull_request_target',
+      GITHUB_EVENT_PATH: eventPath,
+      GITHUB_API_URL: mock.url,
+    });
+    assert.equal(without.status, 1, without.stdout + without.stderr);
+    assert.match(without.stdout, /DROP\\s\+TABLE/);
+    state.labels.push(LABEL);
+    state.timeline.push({
+      event: 'labeled',
+      actor: { login: 'ada' },
+      label: { name: LABEL },
+      created_at: '2026-07-01T00:00:00Z',
+    });
+    const labelled = await runSensor(root, {
+      GITHUB_EVENT_NAME: 'pull_request_target',
+      GITHUB_EVENT_PATH: eventPath,
+      GITHUB_API_URL: mock.url,
+    });
+    assert.equal(labelled.status, 0, labelled.stdout + labelled.stderr);
+    assert.match(labelled.stdout, /approver ada route label/);
+  } finally {
+    await mock.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('A-125 a rules response missing type exits 2', async () => {
+  const { root, base, head } = harnessPull();
+  const eventPath = writeEvent(root, pullEvent(base, head));
+  const mock = await startMock({
+    reviews: [],
+    timeline: [],
+    labels: [],
+    pulls: [],
+    rules: [{ parameters: { require_code_owner_review: true }, ruleset_id: 73 }],
+  });
+  try {
+    const ran = await runSensor(root, {
+      GITHUB_EVENT_NAME: 'pull_request_target',
+      GITHUB_EVENT_PATH: eventPath,
+      GITHUB_API_URL: mock.url,
+    });
+    const out = `${ran.stdout}\n${ran.stderr}`;
+    assert.equal(ran.status, 2, out);
+    assert.notEqual(ran.status, 0);
+    assert.match(out, /missing type/);
+    assert.match(out, /The check failed closed and the label route applies/);
   } finally {
     await mock.close();
     fs.rmSync(root, { recursive: true, force: true });

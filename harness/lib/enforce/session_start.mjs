@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { loadSensors } from '../checks/common.mjs';
 import { formatAssignmentBlock, requireTool } from '../config.mjs';
 import { computeTreeHash } from '../tree-hash.mjs';
+import { collectCredentials, NO_KNOWN, UNSEEN } from './credentials.mjs';
 
 /**
  * Session start orientation. Cannot refuse.
@@ -43,6 +44,7 @@ export function sessionStart(root, config) {
   }
 
   const adapterFresh = checkAdapterFreshness(root, tool);
+  const credentials = credentialsFor(root);
 
   return {
     treeHash: computeTreeHash(root),
@@ -59,7 +61,16 @@ export function sessionStart(root, config) {
     tool,
     toolError,
     adapterFresh,
+    credentials,
   };
+}
+
+function credentialsFor(root) {
+  try {
+    return collectCredentials(root);
+  } catch {
+    return { visible: [], unseen: UNSEEN, text: `${NO_KNOWN}\n${UNSEEN}` };
+  }
 }
 
 function checkAdapterFreshness(root, tool) {

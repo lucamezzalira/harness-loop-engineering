@@ -49,6 +49,7 @@ export const DEFAULTS = Object.freeze({
         'infra/**',
         'terraform/**',
         '.github/workflows/**',
+        '.github/workflows/protected-change.yml',
         'harness/**',
       ],
       patterns: [
@@ -90,6 +91,7 @@ export const DEFAULTS = Object.freeze({
       'stryker.conf.*',
       'stryker.config.*',
       '.github/CODEOWNERS',
+      '.github/workflows/protected-change.yml',
     ],
     shipCommands: [
       'gh pr edit --add-label',

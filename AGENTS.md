@@ -13,11 +13,10 @@ JavaScript (ESM) on Node 20+, npm.
 
 ## What done means
 
-A change is done when `./verify.sh` exits 0. That means the panel of
-review roles has run at the tier the change requires, no P0 or P1
-findings remain open, and the ship gate still requires an explicit
-developer instruction before commit, push, PR, label, review, merge, or deploy. A change that
-only compiles is not done.
+A change is done when `./verify.sh` exits 0 and the pull request ruleset
+plus the required checks on GitHub pass. The ship gate is an early warning.
+It still asks for an explicit developer instruction before commit, push,
+PR, label, review, merge, or deploy. A change that only compiles is not done.
 
 ## Project structure
 

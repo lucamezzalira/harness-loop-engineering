@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { minimatchLike } from '../util/glob.mjs';
-import { addedLines } from '../checks/check-integrity.mjs';
+import { addedLines } from '../checks/diff-lines.mjs';
 
 export const DEFAULT_HUMAN_PATHS = Object.freeze([
   '**/auth/**',

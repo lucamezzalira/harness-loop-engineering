@@ -57,12 +57,16 @@ test('A-84 no test spawns the CLI at the real repo root', () => {
   assert.deepEqual(hits, []);
 });
 
-test('A-85 and A-86 the clean-clone test step runs first and verify waits for the label job', () => {
+test('A-85 and A-86 the clean-clone test step runs first and the sensor job waits for the label job', () => {
   const doc = parseYaml(fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8'));
   const verify = doc.jobs.verify;
-  const needs = Array.isArray(verify.needs) ? verify.needs : [verify.needs];
+  const gate = parseYaml(
+    fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'protected-change.yml'), 'utf8'),
+  );
+  const sensor = gate.jobs['protected-change'];
+  const needs = Array.isArray(sensor.needs) ? sensor.needs : [sensor.needs];
   assert.ok(needs.includes('clear-protected-label'));
-  assert.equal(verify.if, 'always()');
+  assert.equal(sensor.if, 'always()');
   const steps = verify.steps;
   const unit = steps.findIndex((step) => step.name === 'Unit tests (no local config)');
   const write = steps.findIndex((step) =>

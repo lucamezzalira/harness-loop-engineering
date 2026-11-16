@@ -65,7 +65,7 @@ Success prints `render check ok (cursor)` or `render check ok (claude)`. Drift e
 ./verify.sh --status
 ```
 
-Success starts with `enforcement: on`, then `tool: cursor · profile: default` (or `claude`), then `env: local (HARNESS_ENV)`. CI-only sensors are on the `CI-only:` line. `protected-change` is one of them.
+Success starts with `enforcement: on`, then `tool: cursor · profile: default` (or `claude`), then `env: local (HARNESS_ENV)`. CI-only sensors are on the `CI-only:` line. `protected-change` is on the `base-branch workflow` line.
 
 ## 4. First check run
 
@@ -187,7 +187,7 @@ The panel is the reviewer, and on the right tier security, product, and the othe
 
 A unit that touches `review.humanRequired.paths` becomes `needs-human`. The panel cannot clear it.
 
-The trust ladder is shadow, then advisory, then blocking. A role starts where its check is weak and moves up only after the findings stay useful. The ladder does not approve a protected file. CI `protected-change` does that.
+The trust ladder is shadow, then advisory, then blocking. A role starts where its check is weak and moves up only after the findings stay useful. The ladder does not approve a protected file. The ruleset does. `protected-change` reports that, and it still fails a pattern line until the label is current.
 
 ## 8. Backlog triage
 
@@ -207,7 +207,7 @@ A protected path (`protect.checkPaths` in `harness.yaml`, including `protect.shi
 
 Run that from your own terminal. It asks for the paths and a one-line reason, writes the session record, and appends a hash to `harness/state/check-edits.log`. The agent is refused if it tries. An approval covers every change to its paths until it expires (12 hours or end of session), not one specific change. The record is an early warning. CI still decides.
 
-Then open the pull request. A code owner approves the head commit, or, when you are the only owner, you add `protected-change-approved` after the push. A later push clears the label.
+Then open the pull request. A protected path is decided by the ruleset. A line that matches `review.humanRequired.patterns` needs `protected-change-approved` from a code owner after the push. A later push clears the label.
 
 `--allow-check-edit` is not re-run from a fixture in the doc check. `./verify.sh --help` lists it.
 
@@ -292,13 +292,13 @@ This is a regression test for a bug that already escaped, not TDD: the test is w
 
 Rows from `docs/loop-failure-modes.md`.
 
-| What you see                                | What it means                                                                                            | What to do                                                                                                            |
-| ------------------------------------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Exit 2, and the text names a missing tool   | The sensor's binary is not on `PATH` and `missing` is `exit2`                                            | Install the tool. Do not retry the same command as a code failure.                                                    |
-| `sast` fails with no network                | semgrep cannot reach semgrep.dev                                                                         | Record it as a local gap. CI runs the same sensor with network.                                                       |
-| `check-integrity` refuses your own edit     | The diff touches a protected path and the session has no live record, or the hash does not match the log | Run `./verify.sh --allow-check-edit` from your terminal, then edit.                                                   |
-| `protected-change` is red on a pull request | The head has no owner review on that SHA, or the solo label is missing or stale                          | An owner approves the head commit, or the sole owner adds `protected-change-approved` after the latest push.          |
-| The label disappears after a push           | `synchronize` clears `protected-change-approved`, and a label older than `updated_at` does not count     | Add the label again after the push. `verify` waits for the clear job, so a stale label cannot approve the new commit. |
+| What you see                                | What it means                                                                                                                                                    | What to do                                                                                                                                 |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Exit 2, and the text names a missing tool   | The sensor's binary is not on `PATH` and `missing` is `exit2`                                                                                                    | Install the tool. Do not retry the same command as a code failure.                                                                         |
+| `sast` fails with no network                | semgrep cannot reach semgrep.dev                                                                                                                                 | Record it as a local gap. CI runs the same sensor with network.                                                                            |
+| `check-integrity` refuses your own edit     | The diff touches a protected path and the session has no live record, or the hash does not match the log                                                         | Run `./verify.sh --allow-check-edit` from your terminal, then edit.                                                                        |
+| `protected-change` is red on a pull request | An added line matches `review.humanRequired.patterns`, or a protected path has no active code owner rule, and the label is missing or older than the latest push | A code owner adds `protected-change-approved` after the latest push. A protected path exits 0 only when the base branch returns that rule. |
+| The label disappears after a push           | `synchronize` clears `protected-change-approved`, and a label older than `updated_at` does not count                                                             | Add the label again after the push. The `protected-change` job waits for the clear job.                                                    |
 
 Help and version, if you need the flag list:
 

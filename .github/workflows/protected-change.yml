@@ -1,0 +1,66 @@
+# The workflow file for pull_request and pull_request_review comes from the PR
+# merge commit. Both events set GITHUB_REF to refs/pull/PULL_REQUEST_NUMBER/merge,
+# so a run on either event can execute a workflow the pull request edited.
+# https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows
+#
+# pull_request_target runs in the context of the base repository's default branch.
+# A checkout that does not name the pull request head does not execute the pull
+# request. This job checks out the base SHA, fetches refs/pull/<n>/head as data,
+# and runs the sensor from that checkout. It does not npm install and it does not
+# run a script from the fetched ref.
+# https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target
+#
+# Semgrep's pull-request-target-code-checkout rule matches any
+# github.event.pull_request expression on an actions/checkout ref, including
+# base.sha. BASE_SHA is that base commit. The checkout ref reads BASE_SHA.
+name: Protected change
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+env:
+  BASE_SHA: ${{ github.event.pull_request.base.sha }}
+
+jobs:
+  clear-protected-label:
+    if: github.event_name == 'pull_request_target' && github.event.action == 'synchronize'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ env.BASE_SHA }}
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      # Node built-ins only. Do not npm install here. The script must not import yaml.
+      - run: node harness/lib/checks/clear-protected-label.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+  protected-change:
+    needs: clear-protected-label
+    if: always()
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    env:
+      HARNESS_ENV: ci
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ env.BASE_SHA }}
+          fetch-depth: 0
+      - name: Fetch the pull request head as data
+        run: git fetch --no-tags origin "refs/pull/${{ github.event.pull_request.number }}/head"
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Protected change
+        run: bash harness/sensors/checks/protected-change.sh

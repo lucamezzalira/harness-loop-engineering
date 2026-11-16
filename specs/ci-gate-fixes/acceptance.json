@@ -14,7 +14,7 @@
     },
     {
       "id": "A-86",
-      "description": "verify needs clear-protected-label and still runs when that job is skipped.",
+      "description": "The protected-change job needs clear-protected-label and still runs when that job is skipped.",
       "passes": true,
       "test": "harness/lib/checks/ci-gate-fixes.test.mjs"
     },

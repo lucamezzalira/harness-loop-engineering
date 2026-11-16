@@ -1,0 +1,40 @@
+{
+  "entries": [
+    {
+      "id": "A-120",
+      "description": "With no active rules, a pull request that touches harness.yaml fails until a code owner adds protected-change-approved after the latest push, and fails again when that label is older than a new push.",
+      "passes": true,
+      "test": "harness/lib/checks/protected-change.test.mjs"
+    },
+    {
+      "id": "A-121",
+      "description": "An active pull_request rule with require_code_owner_review true makes the same pull request exit 0, and the output names the ruleset source and id.",
+      "passes": true,
+      "test": "harness/lib/checks/protected-change.test.mjs"
+    },
+    {
+      "id": "A-122",
+      "description": "An HTTP 500 from the rules API, and a missing token, each exit 2 on a harness.yaml pull request with no label. The output names the cause. Neither exits 0.",
+      "passes": true,
+      "test": "harness/lib/checks/protected-change.test.mjs"
+    },
+    {
+      "id": "A-123",
+      "description": "protected-change and platform-rules import the same rule-reading module, and harness/ has one definition of the rule-type mapping.",
+      "passes": true,
+      "test": "harness/lib/checks/protected-change.test.mjs"
+    },
+    {
+      "id": "A-124",
+      "description": "A DROP TABLE line outside protected paths fails until it is labelled, whether or not the rules API returns a code owner rule. A-119 still passes.",
+      "passes": true,
+      "test": "harness/lib/checks/protected-change.test.mjs"
+    },
+    {
+      "id": "A-125",
+      "description": "A harness.yaml pull request whose rules response is missing type exits 2. The output names that field. It does not exit 0.",
+      "passes": true,
+      "test": "harness/lib/checks/protected-change.test.mjs"
+    }
+  ]
+}

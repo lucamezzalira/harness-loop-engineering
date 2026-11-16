@@ -1,10 +1,13 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { minimatchLike } from '../util/glob.mjs';
 import { readSession } from '../accounting.mjs';
 import { loadConfig } from '../config.mjs';
 import { recordIsLive, recordMatchesLog, readCheckEditLog } from '../enforce/check-edit-record.mjs';
+import { addedLines } from './diff-lines.mjs';
+import { checkPathsFromConfig, DEFAULT_CHECK_PATHS, pathIsProtected } from './check-paths.mjs';
+
+export { addedLines, checkPathsFromConfig, DEFAULT_CHECK_PATHS, pathIsProtected };
 
 const CODE_EXT = /\.(?:mjs|cjs|js|jsx|ts|tsx)$/;
 const TEST_EXT = /\.test\.(?:mjs|cjs|js|jsx|ts|tsx)$/;
@@ -13,39 +16,6 @@ const ONLY_TOKEN = '.' + 'only(';
 const ESLINT_TOKEN = 'eslint-' + 'disable';
 const TS_IGNORE_TOKEN = '@' + 'ts-ignore';
 const TS_NOCHECK_TOKEN = '@' + 'ts-nocheck';
-
-export const DEFAULT_CHECK_PATHS = Object.freeze([
-  'harness/sensors/**',
-  'harness/lib/enforce/**',
-  'harness/lib/checks/**',
-  'verify.sh',
-  'harness.yaml',
-  'harness/sensors/sensors.yaml',
-  'eslint.config.*',
-  '.eslintrc',
-  '.eslintrc.*',
-  'tsconfig.json',
-  'tsconfig.*.json',
-  '.prettierrc',
-  '.prettierrc.*',
-  'prettier.config.*',
-  'stryker.conf.*',
-  'stryker.config.*',
-  '.github/CODEOWNERS',
-]);
-
-export function checkPathsFromConfig(config) {
-  const listed = config?.protect?.checkPaths;
-  if (Array.isArray(listed) && listed.length) return listed.map(String);
-  return [...DEFAULT_CHECK_PATHS];
-}
-
-export function pathIsProtected(rel, patterns = DEFAULT_CHECK_PATHS) {
-  const file = String(rel || '')
-    .replace(/\\/g, '/')
-    .replace(/^\.\//, '');
-  return patterns.some((pattern) => minimatchLike(file, pattern) || file === pattern);
-}
 
 export function pathCoveredByRecord(rel, session, checkPaths, now = Date.now(), logText = '') {
   const record = session?.explicitCheckEdit;
@@ -142,32 +112,6 @@ export function evaluateCheckIntegrity({
   }
 
   return { exitCode: findings.length ? 1 : 0, findings, localApproval };
-}
-
-export function addedLines(diff) {
-  const out = [];
-  let file = '';
-  let lineNo = 0;
-  for (const line of String(diff || '').split('\n')) {
-    if (line.startsWith('+++ b/')) {
-      file = line.slice(6);
-      continue;
-    }
-    const hunk = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)/);
-    if (hunk) {
-      lineNo = Number(hunk[1]);
-      continue;
-    }
-    if (!file || file === '/dev/null') continue;
-    if (line.startsWith('+') && !line.startsWith('+++')) {
-      out.push({ file, line: lineNo, text: line.slice(1) });
-      lineNo += 1;
-      continue;
-    }
-    if (line.startsWith('-') && !line.startsWith('---')) continue;
-    if (!line.startsWith('\\')) lineNo += 1;
-  }
-  return out;
 }
 
 export function collectIntegrityInputs(root) {

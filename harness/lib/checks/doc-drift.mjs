@@ -9,6 +9,7 @@ const LINK = /\[[^\]]*\]\(([^)\s]+)\)/g;
 /**
  * Docs stay aligned with the flags, sensors, roles, skills, and config keys
  * the harness actually has. Relative links in tracked markdown must resolve.
+ * Setting lines in the platform docs need a cited https URL on the same line.
  * @param {string} root
  * @returns {{ exitCode: number, findings: string[] }}
  */
@@ -21,6 +22,7 @@ export function evaluateDocDrift(root) {
     ...configKeyFindings(root),
     ...linkFindings(root),
     ...guideFindings(root),
+    ...settingFindings(root),
   ];
   return { exitCode: findings.length ? 1 : 0, findings };
 }
@@ -228,6 +230,25 @@ function readIf(file) {
   } catch {
     return '';
   }
+}
+
+const SETTING_DOCS = ['docs/platform-gates.md', 'docs/agent-identity.md'];
+const SETTING_LINE = /^\s*-\s+\*\*([^*]+)\*\*/;
+
+function settingFindings(root) {
+  const findings = [];
+  for (const rel of SETTING_DOCS) {
+    const text = readIf(path.join(root, rel));
+    if (!text) continue;
+    for (const line of text.split('\n')) {
+      const match = line.match(SETTING_LINE);
+      if (!match) continue;
+      if (!line.includes('https://')) {
+        findings.push(`${rel} setting "${match[1].trim()}" has no cited doc URL`);
+      }
+    }
+  }
+  return findings;
 }
 
 const isMain =

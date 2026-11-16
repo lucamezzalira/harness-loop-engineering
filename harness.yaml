@@ -55,6 +55,7 @@ review:
       - 'infra/**'
       - 'terraform/**'
       - '.github/workflows/**'
+      - '.github/workflows/protected-change.yml'
       - 'harness/**'
     patterns:
       - 'DROP\s+TABLE'
@@ -92,6 +93,7 @@ protect:
     - 'stryker.conf.*'
     - 'stryker.config.*'
     - .github/CODEOWNERS
+    - .github/workflows/protected-change.yml
   # Commands the ship gate refuses unless the developer gave an explicit instruction.
   # Editing this list is a protected check path. ship-commands.mjs interprets the rows.
   # gh pr review matches -a, --approve, -r, and --request-changes. -c and --comment stay allowed.
@@ -194,3 +196,20 @@ logs:
 limits:
   agentsMdLines: 200 # per Anthropic's Claude Code memory docs
   skillBodyLines: 500 # per Anthropic's Skill authoring best practices
+
+# What platform-rules expects on the default branch.
+# Field names match the REST rules schema. mode warn exits 0 and prints
+# each miss. mode block exits 1. This repo has one maintainer, so warn.
+# https://docs.github.com/en/rest/repos/rules
+platform:
+  mode: warn
+  pullRequest:
+    requiredApprovingReviewCount: 1
+    requireCodeOwnerReview: true
+    dismissStaleReviewsOnPush: true
+    requireLastPushApproval: true
+  requiredStatusChecks:
+    - verify
+    - protected-change
+  requiredReviewers:
+    minimumApprovals: 2

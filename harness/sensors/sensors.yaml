@@ -188,8 +188,17 @@ sensors:
     enabled: true
     missing: n/a
 
-  - name: protected-change
+  # Runs in CI verify. It reads the live ruleset. It does not apply one.
+  - name: platform-rules
     tier: commit
+    where: [ci]
+    blocking: true
+    enabled: true
+    missing: n/a
+
+  # Not a verify tier. The base-branch workflow runs the script directly.
+  - name: protected-change
+    tier: manual
     where: [ci]
     blocking: true
     enabled: true
