@@ -2,13 +2,13 @@
   "entries": [
     {
       "id": "A-64",
-      "description": "A pull request that changes harness.yaml with no reviews fails and names the file, the matched rule, and its owner.",
+      "description": "A pull request that changes harness.yaml reports that the ruleset decides, names the file and the matched rule, and exits 0.",
       "passes": true,
       "test": "harness/lib/checks/protected-change.test.mjs"
     },
     {
       "id": "A-65",
-      "description": "An APPROVED review on the head SHA from a code owner who is not the author passes. The author's own review does not.",
+      "description": "An APPROVED review on the head SHA does not clear a pattern line. A protected path reports the ruleset and exits 0.",
       "passes": true,
       "test": "harness/lib/checks/protected-change.test.mjs"
     },
@@ -50,7 +50,7 @@
     },
     {
       "id": "A-72",
-      "description": "A missing GITHUB_TOKEN or a GitHub API error exits 2.",
+      "description": "A GitHub API error while reading the label for a pattern line exits 2. A protected path with no token exits 2 and names the missing token.",
       "passes": true,
       "test": "harness/lib/checks/protected-change.test.mjs"
     },

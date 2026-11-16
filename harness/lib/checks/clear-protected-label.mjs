@@ -5,7 +5,13 @@ import { PROTECTED_LABEL, github, readGithubEvent } from './github-api.mjs';
 export async function clearProtectedLabel(env = process.env) {
   const name = env.GITHUB_EVENT_NAME || '';
   const event = readGithubEvent(env);
-  if (name !== 'pull_request' || event.action !== 'synchronize') {
+  // pull_request_target uses the pull_request payload. synchronize is one of its
+  // activity types. The workflow file for that event comes from the default branch.
+  // https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows
+  if (
+    (name !== 'pull_request' && name !== 'pull_request_target') ||
+    event.action !== 'synchronize'
+  ) {
     return { exitCode: 0, text: 'clear-protected-label skipped\n' };
   }
   const number = event.pull_request?.number;

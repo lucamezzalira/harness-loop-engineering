@@ -1,0 +1,118 @@
+{
+  "entries": [
+    {
+      "id": "A-101",
+      "description": "The protected-change workflow triggers on pull_request_target, checks out a ref that is not the pull request head, does not npm install or run a script from the fetched ref, and its permissions are contents read, pull-requests read, and issues read, with issues write only on the label job.",
+      "passes": true,
+      "test": "harness/lib/checks/protected-change.test.mjs"
+    },
+    {
+      "id": "A-102",
+      "description": "A pull request head that rewrites protected-change.mjs to exit 0 and adds DROP TABLE still fails when the sensor entry point runs from the base checkout.",
+      "passes": true,
+      "test": "harness/lib/checks/protected-change.test.mjs"
+    },
+    {
+      "id": "A-103",
+      "description": "A pull request head that removes DROP\\s+TABLE from harness.yaml and adds a DROP TABLE line still fails because the decision reads the base harness.yaml.",
+      "passes": true,
+      "test": "harness/lib/checks/protected-change.test.mjs"
+    },
+    {
+      "id": "A-104",
+      "description": "ci.yml does not run protected-change, and --status lists it as running from the base-branch workflow.",
+      "passes": true,
+      "test": "harness/lib/checks/protected-change.test.mjs"
+    },
+    {
+      "id": "A-105",
+      "description": "A mocked rules API with no rules on the default branch reports every expected rule missing. warn exits 0 and prints each one. block exits 1.",
+      "passes": true,
+      "test": "harness/lib/checks/platform-rules.test.mjs"
+    },
+    {
+      "id": "A-106",
+      "description": "A pull request rule with dismiss_stale_reviews_on_push false makes the sensor name that parameter.",
+      "passes": true,
+      "test": "harness/lib/checks/platform-rules.test.mjs"
+    },
+    {
+      "id": "A-107",
+      "description": "Output always contains the line that the bypass list is not visible to this token, and never calls the bypass list safe.",
+      "passes": true,
+      "test": "harness/lib/checks/platform-rules.test.mjs"
+    },
+    {
+      "id": "A-108",
+      "description": "A rule type the sensor cannot map is reported as unknown and is never a pass.",
+      "passes": true,
+      "test": "harness/lib/checks/platform-rules.test.mjs"
+    },
+    {
+      "id": "A-109",
+      "description": "A missing token or a GitHub API error exits 2.",
+      "passes": true,
+      "test": "harness/lib/checks/platform-rules.test.mjs"
+    },
+    {
+      "id": "A-110",
+      "description": "With GH_TOKEN set, session start names GH_TOKEN in the session output and in report.json under credentials, and never prints the value.",
+      "passes": true,
+      "test": "harness/lib/enforce/credentials.test.mjs"
+    },
+    {
+      "id": "A-111",
+      "description": "With a fake gh on PATH that reports a logged-in account, the session start warning names the gh login.",
+      "passes": true,
+      "test": "harness/lib/enforce/credentials.test.mjs"
+    },
+    {
+      "id": "A-112",
+      "description": "With none of the credential markers and no .env, session start prints no known credentials visible and names what it cannot see.",
+      "passes": true,
+      "test": "harness/lib/enforce/credentials.test.mjs"
+    },
+    {
+      "id": "A-113",
+      "description": "The credentials warning does not change the exit code of session start.",
+      "passes": true,
+      "test": "harness/lib/enforce/credentials.test.mjs"
+    },
+    {
+      "id": "A-114",
+      "description": "doc-drift fails when a setting name in docs/platform-gates.md or docs/agent-identity.md has no cited doc URL on the same line.",
+      "passes": true,
+      "test": "harness/lib/checks/platform-gates.test.mjs"
+    },
+    {
+      "id": "A-115",
+      "description": "No file in the repo contains the old turn-mode claim about an agent commit, or the old course-map claim about an integrity check.",
+      "passes": true,
+      "test": "harness/lib/checks/platform-gates.test.mjs"
+    },
+    {
+      "id": "A-116",
+      "description": "The failure-modes table has a Prevents or warns column, every row is filled, and hook or pattern rows say warns.",
+      "passes": true,
+      "test": "harness/lib/checks/platform-gates.test.mjs"
+    },
+    {
+      "id": "A-117",
+      "description": "doc-drift stays green, and the README says the review panel and any hosted AI reviewer are advisory and that their approval never counts.",
+      "passes": true,
+      "test": "harness/lib/checks/platform-gates.test.mjs"
+    },
+    {
+      "id": "A-118",
+      "description": "The protected-change workflow has no pull_request or pull_request_review trigger.",
+      "passes": true,
+      "test": "harness/lib/checks/protected-change.test.mjs"
+    },
+    {
+      "id": "A-119",
+      "description": "DROP TABLE outside every protected path fails until a code owner label is added after the latest push. A pull request that only touches a protected path reports that the ruleset decides and exits 0.",
+      "passes": true,
+      "test": "harness/lib/checks/protected-change.test.mjs"
+    }
+  ]
+}

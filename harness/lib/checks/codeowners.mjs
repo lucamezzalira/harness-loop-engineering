@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { minimatchLike } from '../util/glob.mjs';
-import { checkPathsFromConfig } from './check-integrity.mjs';
+import { checkPathsFromConfig } from './check-paths.mjs';
 import { humanRequiredConfig } from '../review/human-required.mjs';
 
 export function codeownersFile(root) {

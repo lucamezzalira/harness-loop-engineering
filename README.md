@@ -4,7 +4,7 @@ A standalone harness you drop into a Node repository. One executable is the entr
 
 It gives the coding agent a fixed set of guides, a fixed set of sensors, a small number of moments where it can be refused, and a review panel that runs on every piece of work.
 
-Nothing ships (commit, push, pull request, label, review, merge, deploy) without an explicit developer instruction in the current session. That is not configurable.
+A commit, push, pull request, label, review, merge, or deploy from the agent waits for an explicit developer instruction in the current session. That check is an early warning. The gate is the pull request ruleset. The settings are in [docs/platform-gates.md](docs/platform-gates.md).
 
 Step by step: [docs/guide.md](docs/guide.md).
 
@@ -35,11 +35,11 @@ node scripts/smoke-runtime-drift.js
 
 CI's `protected-change` check decides, on the pull request, whether a protected change was approved. Local hooks are an early warning. They are only as strong as the hooks that tool actually sends. Cursor's adapter has `beforeShellExecution` and `afterFileEdit`. It has no before-write hook, so a Write of `harness/state/session.json` never reaches `pathUnderState`.
 
-A local `--allow-check-edit` approval covers every change to its paths until it expires (12 hours or end of session), not one specific change. A solo maintainer (the only owner of the file) can add the label `protected-change-approved`. A new push clears that label. The `clear-protected-label` job runs on `synchronize`, and the `verify` job waits for it. A `labeled` event older than the pull request's `updated_at` is treated as absent.
+A local `--allow-check-edit` approval covers every change to its paths until it expires (12 hours or end of session), not one specific change. A code owner adds the label `protected-change-approved` when a diff adds a line that matches `review.humanRequired.patterns`. A new push clears that label. The `clear-protected-label` job runs on `synchronize`, and the `protected-change` job waits for it. A `labeled` event older than the pull request's `updated_at` is treated as absent. A protected path exits 0 when the base branch has an active pull request rule that requires code owner review. Otherwise it needs the same label. If those rules cannot be read, the sensor exits 2 and does not pass. The ruleset is the gate only in that case.
 
-Without branch protection, a red `protected-change` does not block a merge. Optional: in the GitHub repo, open Settings, then Branches, and require the `protected-change` status check before merging.
+Branch protection and the ruleset are part of setup, not a later option. Apply them before you treat a merge as gated. The settings, and what each one stops, are in [docs/platform-gates.md](docs/platform-gates.md). Until those rules are on, a red `protected-change` does not block a merge.
 
-If the agent can reach the developer's GitHub token, GitHub cannot tell the agent from the developer. Keep tokens out of the agent's environment. The ship gate refuses push, pull-request create, label, review, and merge commands until that explicit instruction is in the session.
+If the agent can reach the developer's GitHub token, GitHub cannot tell the agent from the developer. Keep tokens out of the agent's environment. The ship gate warns on push, pull-request create, label, review, and merge commands until that explicit instruction is in the session. That warning is early. The gate is the pull request ruleset.
 
 ## How it works
 
@@ -53,7 +53,7 @@ On the way, hooks and `./verify.sh` check the code:
 
 1. After an edit → fast checks (`--edit`: format, lint, context budget).
 2. When the agent tries to finish a turn → fuller checks (`--turn`) and usually the **reviewer** role.
-3. Before commit → green `report.json` plus an **explicit yes from you**. The agent cannot commit on its own.
+3. Before commit → green `report.json` plus an **explicit yes from you**. The hook refuses an agent commit as an early warning. The gate is the pull request ruleset.
 
 You stay in control of when to continue. Same rhythm as chatting with Cursor today.
 
@@ -300,7 +300,7 @@ Two action flags together exit `2` naming both. Unknown flags exit `2` and print
 
 Precedence: `harness.local.yaml` (gitignored) > `harness.yaml` > defaults. No flag layer.
 
-Top-level keys in `harness.yaml`: `project` (service layout), `roles` (which panel roles are enabled), `review` (cadence, block list, human-required paths), `protect` (check paths and `stateWrites` under `harness/state`), `mutation` (survivor findings stay off the local turn), `severity` (category to P0–P3), `backlog` (cap on P2 and P3 items), `baseline` (ratchet counts), `verify` (fail-fast and retry), `logs` (optional event log), `limits` (`AGENTS.md` and skill body ceilings).
+Top-level keys in `harness.yaml`: `project` (service layout), `roles` (which panel roles are enabled), `review` (cadence, block list, human-required paths), `protect` (check paths and `stateWrites` under `harness/state`), `mutation` (survivor findings stay off the local turn), `severity` (category to P0–P3), `backlog` (cap on P2 and P3 items), `baseline` (ratchet counts), `verify` (fail-fast and retry), `logs` (optional event log), `limits` (`AGENTS.md` and skill body ceilings), `platform` (the ruleset expected on the default branch; `platform.mode` is `warn` or `block`).
 
 ```yaml
 # harness.local.yaml — required before --render / --plan / --loop
@@ -311,24 +311,25 @@ confirmProfile: true
 
 Roles never set severity. They return a `category`; `harness.yaml` maps category → P0–P3.
 
-Review roles: host-tool CLI first (Cursor or Claude Code), then provider API fallback (`ANTHROPIC_API_KEY` or local OpenAI-compatible endpoint).
+Review roles: host-tool CLI first (Cursor or Claude Code), then provider API fallback (`ANTHROPIC_API_KEY` or local OpenAI-compatible endpoint). The review panel and any hosted AI reviewer are advisory. Their approval never counts. GhostCommit (Cloud Security Alliance, July 2026) is a prompt hidden in an image that produced a commit the reviewer did not intend (https://labs.cloudsecurityalliance.org/research/csa-research-note-ghostcommit-image-prompt-injection-ai-code/).
 
 ### If you change a setting
 
-| Setting                | Default               | What changes                       | When you want the other value                                    |
-| ---------------------- | --------------------- | ---------------------------------- | ---------------------------------------------------------------- |
-| `verify.failFast`      | `true`                | Stops at first blocking fail       | `false` in CI to collect all failures                            |
-| `review.maxCycles`     | `3`                   | Panel iterations before escalation | Lower to save cost; higher for stubborn P1s                      |
-| `review.cadence.turn`  | `[reviewer]`          | Roles at end of turn               | Add roles only if budget allows                                  |
-| `review.cadence.unit`  | `[security, product]` | Roles at unit end                  | Keep cheap; put specialists on wave/ship                         |
-| `review.cadence.wave`  | specialists           | Roles after a wave                 | Expand when parallel waves need broader review                   |
-| `review.cadence.ship`  | specialists           | Final panel before staging         | Must stay complete enough to catch acceptance gaps               |
-| `loop.unitStallFactor` | `2`                   | Stall → `unclosable` ceiling       | Raise only if units routinely need long recoveries               |
-| `loop.maxTurns`        | required for `--loop` | Hard stop on agent cycles          | Size to the PRD, not "unlimited"                                 |
-| `profile` (local)      | `default`             | Model assignment from models.yaml  | `hybrid-local` for Ollama panels + host-tool edits               |
-| `baseline.*`           | set by `--install`    | Ratchet: fail on growth only       | Lower after a cleanup; never raise casually                      |
-| `logs.enabled`         | `false`               | NDJSON event log                   | `true` / `full` when debugging a stuck loop                      |
-| `confirmProfile`       | `true`                | Asks before spending on plan/loop  | `false` only in controlled automation (`gate: never` also skips) |
+| Setting                | Default               | What changes                                                         | When you want the other value                                                                      |
+| ---------------------- | --------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `verify.failFast`      | `true`                | Stops at first blocking fail                                         | `false` in CI to collect all failures                                                              |
+| `review.maxCycles`     | `3`                   | Panel iterations before escalation                                   | Lower to save cost; higher for stubborn P1s                                                        |
+| `review.cadence.turn`  | `[reviewer]`          | Roles at end of turn                                                 | Add roles only if budget allows                                                                    |
+| `review.cadence.unit`  | `[security, product]` | Roles at unit end                                                    | Keep cheap; put specialists on wave/ship                                                           |
+| `review.cadence.wave`  | specialists           | Roles after a wave                                                   | Expand when parallel waves need broader review                                                     |
+| `review.cadence.ship`  | specialists           | Final panel before staging                                           | Must stay complete enough to catch acceptance gaps                                                 |
+| `loop.unitStallFactor` | `2`                   | Stall → `unclosable` ceiling                                         | Raise only if units routinely need long recoveries                                                 |
+| `loop.maxTurns`        | required for `--loop` | Hard stop on agent cycles                                            | Size to the PRD, not "unlimited"                                                                   |
+| `profile` (local)      | `default`             | Model assignment from models.yaml                                    | `hybrid-local` for Ollama panels + host-tool edits                                                 |
+| `baseline.*`           | set by `--install`    | Ratchet: fail on growth only                                         | Lower after a cleanup; never raise casually                                                        |
+| `logs.enabled`         | `false`               | NDJSON event log                                                     | `true` / `full` when debugging a stuck loop                                                        |
+| `confirmProfile`       | `true`                | Asks before spending on plan/loop                                    | `false` only in controlled automation (`gate: never` also skips)                                   |
+| `platform.mode`        | `warn`                | `warn` prints each missing ruleset rule and exits 0. `block` exits 1 | `block` once the ruleset is on and two people can approve. This repo has one maintainer, so `warn` |
 
 If you cannot write the third column for a knob, make it a constant instead of a setting.
 
@@ -455,7 +456,7 @@ review:
 
 `./verify.sh --status` prints the effective `humanRequired.paths`.
 
-A protected check edit is separate. `./verify.sh --allow-check-edit` (interactive terminal only) records the globs and a one-line reason on the session, and appends a sha256 of that record to `harness/state/check-edits.log`. `pre_tool` and `check-integrity` treat that record as a local early warning: they allow a protected path only when the record covers it and the hash matches the last log line. A mismatch is `check-weakened`. The record is not the decision. The CI-only sensor `protected-change` decides on the pull request. `./verify.sh --status` lists it under `CI-only`, and it does not run locally.
+A protected check edit is separate. `./verify.sh --allow-check-edit` (interactive terminal only) records the globs and a one-line reason on the session, and appends a sha256 of that record to `harness/state/check-edits.log`. `pre_tool` and `check-integrity` treat that record as a local early warning: they allow a protected path only when the record covers it and the hash matches the last log line. A mismatch is `check-weakened`. The record is not the decision. The sensor `protected-change` runs from the base-branch workflow, not from the verify tiers. `./verify.sh --status` lists it on the `base-branch workflow` line, and it does not run locally.
 
 `pre_tool` also refuses any agent write under `harness/state/`, including a shell redirect, `tee`, `cp`, `mv`, `rm`, `truncate`, `sed -i`, `node -e`, and `python -c`. The names of those matchers are `protect.stateWrites` in `harness.yaml`. It refuses any shell command that contains `--allow-check-edit`. The harness's own Node processes still write that directory. None of this stops a person sitting at the developer's own terminal.
 
@@ -463,29 +464,29 @@ Before a change is called done, `specs/<slug>/REPORT.md` has four sections (crit
 
 ## Course map
 
-| Concept                     | Where it lives                                                                                     |
-| --------------------------- | -------------------------------------------------------------------------------------------------- |
-| guides and sensors          | [`harness/sensors/sensors.yaml`](harness/sensors/sensors.yaml)                                     |
-| hooks                       | [`harness/render/cursor/hooks/before-shell.sh`](harness/render/cursor/hooks/before-shell.sh)       |
-| exit codes                  | [`docs/adr/0003-checks-return-four-exit-codes.md`](docs/adr/0003-checks-return-four-exit-codes.md) |
-| ship gate                   | [`harness/lib/enforce/pre_tool.mjs`](harness/lib/enforce/pre_tool.mjs)                             |
-| checks the agent can't skip | [`harness/lib/checks/check-integrity.mjs`](harness/lib/checks/check-integrity.mjs)                 |
-| paths that need a person    | [`harness/lib/review/human-required.mjs`](harness/lib/review/human-required.mjs)                   |
-| mutation testing            | [`harness/sensors/checks/mutation.sh`](harness/sensors/checks/mutation.sh)                         |
-| escape to test              | [`harness/skills/fix-an-escape/SKILL.md`](harness/skills/fix-an-escape/SKILL.md)                   |
-| budgets and STOP            | [`harness/lib/plan/loop.mjs`](harness/lib/plan/loop.mjs)                                           |
-| worktrees                   | [`harness/lib/plan/loop.mjs`](harness/lib/plan/loop.mjs)                                           |
-| memory                      | [`HANDOFF.md`](HANDOFF.md)                                                                         |
-| checker subagents           | [`harness/roles/acceptance-checker.md`](harness/roles/acceptance-checker.md)                       |
-| the retro                   | [`harness/lib/plan/retro.mjs`](harness/lib/plan/retro.mjs)                                         |
-| the trust ladder            | [`harness/lib/panel/trust.mjs`](harness/lib/panel/trust.mjs)                                       |
-| review metrics              | [`harness/lib/accounting.mjs`](harness/lib/accounting.mjs)                                         |
+| Concept                      | Where it lives                                                                                     |
+| ---------------------------- | -------------------------------------------------------------------------------------------------- |
+| guides and sensors           | [`harness/sensors/sensors.yaml`](harness/sensors/sensors.yaml)                                     |
+| hooks                        | [`harness/render/cursor/hooks/before-shell.sh`](harness/render/cursor/hooks/before-shell.sh)       |
+| exit codes                   | [`docs/adr/0003-checks-return-four-exit-codes.md`](docs/adr/0003-checks-return-four-exit-codes.md) |
+| ship gate                    | [`harness/lib/enforce/pre_tool.mjs`](harness/lib/enforce/pre_tool.mjs)                             |
+| integrity check (CI decides) | [`harness/lib/checks/check-integrity.mjs`](harness/lib/checks/check-integrity.mjs)                 |
+| paths that need a person     | [`harness/lib/review/human-required.mjs`](harness/lib/review/human-required.mjs)                   |
+| mutation testing             | [`harness/sensors/checks/mutation.sh`](harness/sensors/checks/mutation.sh)                         |
+| escape to test               | [`harness/skills/fix-an-escape/SKILL.md`](harness/skills/fix-an-escape/SKILL.md)                   |
+| budgets and STOP             | [`harness/lib/plan/loop.mjs`](harness/lib/plan/loop.mjs)                                           |
+| worktrees                    | [`harness/lib/plan/loop.mjs`](harness/lib/plan/loop.mjs)                                           |
+| memory                       | [`HANDOFF.md`](HANDOFF.md)                                                                         |
+| checker subagents            | [`harness/roles/acceptance-checker.md`](harness/roles/acceptance-checker.md)                       |
+| the retro                    | [`harness/lib/plan/retro.mjs`](harness/lib/plan/retro.mjs)                                         |
+| the trust ladder             | [`harness/lib/panel/trust.mjs`](harness/lib/panel/trust.mjs)                                       |
+| review metrics               | [`harness/lib/accounting.mjs`](harness/lib/accounting.mjs)                                         |
 
 ## Sensors
 
 Each name has `harness/sensors/guidance/<name>.md` and a row in `harness/sensors/sensors.yaml`.
 
-`format`, `lint`, `context-budget`, `session-state`, `complexity`, `types`, `secrets`, `unit`, `env`, `env-declared`, `boundaries`, `contracts`, `acceptance`, `adr-frontmatter`, `adr-index`, `diff-scope`, `check-integrity`, `rule-shape`, `doc-drift`, `deadcode`, `duplication`, `audit`, `sast`, `mutation`, `prsize`, `report-present`, `protected-change`, `codeowners-coverage`, `runtime-drift`.
+`format`, `lint`, `context-budget`, `session-state`, `complexity`, `types`, `secrets`, `unit`, `env`, `env-declared`, `boundaries`, `contracts`, `acceptance`, `adr-frontmatter`, `adr-index`, `diff-scope`, `check-integrity`, `rule-shape`, `doc-drift`, `deadcode`, `duplication`, `audit`, `sast`, `mutation`, `prsize`, `report-present`, `platform-rules`, `protected-change`, `codeowners-coverage`, `runtime-drift`.
 
 ## What changed
 

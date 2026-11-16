@@ -24,3 +24,4 @@ stryker.config.* @lucamezzalira
 infra/** @lucamezzalira
 terraform/** @lucamezzalira
 .github/workflows/** @lucamezzalira
+.github/workflows/protected-change.yml @lucamezzalira
